@@ -5,7 +5,7 @@ from measureskyregion_mean import measureskybin as measureskybin_mean
 from measureskyregion import measureskybin
 from split_image import bin_image
 
-def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ = True, dq_fraction = 0.2):
+def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ = True, dq_fraction = 0.2, percentile = 50):
 
 	'''
 	Calculte the Percentile-clip sky surface brightness from a single science array from an Hubble Space Telescope flt/ flc image.
@@ -27,6 +27,8 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ =
 	dq_fraction - float
 		Fraction (between 0 and 1.0) of pixels flagged from DQ array within a sub-region for the subregion
 		to be considered "bad" and subsequently masked
+	percentile - int
+		Percentile to be used when estimating the sky-SB. A value of 50 is recommended.
 
 	Outputs
 	-------
@@ -136,7 +138,7 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ =
 
 	#Define array without the nans
 	bkg_arr_nonans = bkg_arr[goodind]
-	calc_bkg = np.nanpercentile(bkg_arr_nonans,5) #Calc sky is 5th percentile of arr w/out nans
+	calc_bkg = np.nanpercentile(bkg_arr_nonans,percentile) #Calc sky is Nth percentile of arr w/out nans
 	calc_rms = np.nanmean(rms_arr) #Calc rms is just mean of all RMS values
 
 	#Get INDICIES of lowest 5% of regions :)
@@ -169,7 +171,7 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ =
 	rms_arr_mean = np.array(all_rms_mean)
 	goodind_mean = np.where(~np.isnan(bkg_arr_mean))[0].tolist()
 	bkg_arr_nonans_mean = bkg_arr_mean[goodind_mean]
-	calc_bkg_mean = np.nanpercentile(bkg_arr_nonans_mean,5) #Calc sky is 5th percentile of arr w/out nans
+	calc_bkg_mean = np.nanpercentile(bkg_arr_nonans_mean,percentile) #Calc sky is 5th percentile of arr w/out nans
 	calc_rms_mean = np.nanmean(rms_arr_mean) #Calc rms is just mean of all RMS values
 
 	N_tot = len(cutouts)
