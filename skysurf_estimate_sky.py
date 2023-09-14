@@ -5,7 +5,7 @@ from measureskyregion_mean import measureskybin as measureskybin_mean
 from measureskyregion import measureskybin
 from split_image import bin_image
 
-def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ = True, dq_fraction = 0.2, percentile = 50):
+def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good_list = [0], has_DQ = True, dq_fraction = 0.2, percentile = 50):
 
 	'''
 	Calculte the Percentile-clip sky surface brightness from a single science array from an Hubble Space Telescope flt/ flc image.
@@ -20,8 +20,8 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ =
 		and bin_size = 39 for WFC3/IR
 	dq_data - arr (optional)
 		Data Quality data from 'DQ' extension
-	dq_good - int (optional)
-		Sum of DQ flags to be considered good when masking
+	dq_good_list - list (optional)
+		List of DQ flags to be considered good when masking. MUST BE A BINARY NUMBER (0,1,2,4,8,16,etc)
 	has_DQ - bool (optional)
 		True if DQ will be used
 	dq_fraction - float
@@ -73,18 +73,16 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ =
 
 	# Mask pixels flagged in DQ array 
 	if has_DQ == True:
+		# Define list of all possible bad flags
+		dq_bad_list = 2**np.arange(0,20)
 
-		# Set all zeros to a new flag so that they are ignored during the masking
-		# Important because (0 | 0) == 0
-		dq_copy = np.copy(dq_data)
-		dq_copy[dq_copy == 0] = 65536
-
-		# Add 65536 to good flags since they actually represent zero
-		dq_good += 65536
-
-		# (dq_copy | 512) returns dq_copy if the flags within dq_good are NOT included in the flags
-		# for a single pixel in the DQ array
-		data[(dq_data | dq_good) == dq_data] = np.nan
+		# Loop trhough each bad flag and mask corresponding pixels in the SCIENCE array
+		# Note: (dq_data | FLAG) returns dq_data if FLAG is within dq_bad_list
+		# Example: (6|4) == 6
+		# Example: (6|2) == 6
+		for dq_bad in dq_bad_list:
+			if dq_bad not in dq_good_list:
+				data[(dq_data | dq_bad) == dq_data] = np.nan
 
 	### Make cutouts ###
 	cutout_shape, cutouts = bin_image(use_array=True, data_array=data, bin_size=(bin_size,bin_size),
@@ -105,13 +103,13 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good = 0, has_DQ =
 		sky, rms = measureskybin(c.data,axis=0)
 		sky_mean, rms_mean = measureskybin_mean(c.data,axis=0)
 
-		# if np.count_nonzero(np.isnan(c.data)) > (cutout_shape[0]*cutout_shape[1])*dq_fraction:
-		# 	sky = float('nan')
-		# 	rms = float('nan')
-		# 	badpx_ind.append(ci)
+		if np.count_nonzero(np.isnan(c.data)) > (cutout_shape[0]*cutout_shape[1])*dq_fraction:
+			sky = float('nan')
+			rms = float('nan')
+			badpx_ind.append(ci)
 
-		# 	sky_mean = float('nan')
-		# 	rms_mean = float('nan')
+			sky_mean = float('nan')
+			rms_mean = float('nan')
 
 		all_skys.append(sky)
 		all_rms.append(rms)
