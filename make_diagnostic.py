@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, SymLogNorm
 import numpy as np
+from astropy.stats import sigma_clip
 
 def make_plots(data, cutouts, goodind, badind, sky, rms, badpx = None, figsize = (10,10),
     title = None, save = False, savepath = None, show = False, text_pos = 0.12):
@@ -56,20 +57,34 @@ def make_plots(data, cutouts, goodind, badind, sky, rms, badpx = None, figsize =
     if not show == True:
         plt.close()
 
-def make_subplot(ax, sky, rms, data, cutouts, goodind = [], badind = [], badpx = [], text_pos = 0.12):
+def make_subplot(ax, skysurf_sky, skysurf_rms, data, cutouts, goodind = [], badind = [], badpx = [], text_pos = 0.12):
 
-    calc_bkg = np.copy(sky)
-    calc_rms = np.copy(rms)
-
-    if sky < 0:
-        minv = -rms
-        maxv = 2*rms
-        data += sky
-    else:
-        minv = sky-rms
-        maxv = sky+2*rms
+    # Save SKYSURF sky-SB and sky-SB RMS to show at bottom of plot
+    calc_bkg = np.copy(skysurf_sky)
+    calc_rms = np.copy(skysurf_rms)
+    
+    # If the median pixel value of the data is negative, make it positive
+    # Run sigma_clip one time only to make the code more efficient
+    clipped_data = sigma_clip(data, sigma = 3)
+    clipped_median = np.ma.median(clipped_data)
+    # if clipped_median < 0:
+    #     data += np.abs(clipped_median)
+    
+    # Find the sky and rms values you will use for plotting
+    plotting_data = np.abs(data-clipped_median)
+    clipped_plotting_data = sigma_clip(plotting_data, sigma = 3)
+    plot_sky = np.ma.median(clipped_plotting_data)
+    plot_rms = np.ma.std(clipped_plotting_data)  
         
-    ax.imshow(data, norm=LogNorm(vmin=minv, vmax=maxv), cmap='Greys', origin='lower')
+    # Set the minimum and maximum values for the colorbar
+    minv = plot_sky-plot_rms
+    maxv = plot_sky+10*plot_rms
+        
+    # Only plot if the data is not ALL NaNs
+    if np.isnan(data).all() == False:
+        ax.imshow(plotting_data, norm=LogNorm(vmin = minv, vmax = maxv), cmap='Greys', origin='lower')
+    elif np.isnan(data).all() == True:
+        ax.imshow(np.ones(np.shape(data)), cmap='Greys', origin='lower')
     
     #For each cutout object, plot it on the original image
     for ci, c in enumerate(cutouts):
