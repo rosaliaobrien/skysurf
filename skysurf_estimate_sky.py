@@ -100,9 +100,6 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good_list = [0], h
 
 	for ci, c in enumerate(cutouts):
 
-		sky, rms = measureskybin(c.data,axis=0)
-		sky_mean, rms_mean = measureskybin_mean(c.data,axis=0)
-
 		if np.count_nonzero(np.isnan(c.data)) > (cutout_shape[0]*cutout_shape[1])*dq_fraction:
 			sky = float('nan')
 			rms = float('nan')
@@ -110,6 +107,11 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good_list = [0], h
 
 			sky_mean = float('nan')
 			rms_mean = float('nan')
+        
+		else:
+
+			sky, rms = measureskybin(c.data,axis=0)
+			sky_mean, rms_mean = measureskybin_mean(c.data,axis=0)
 
 		all_skys.append(sky)
 		all_rms.append(rms)
@@ -117,15 +119,16 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good_list = [0], h
 		all_skys_mean.append(sky_mean)
 		all_rms_mean.append(rms_mean)
 
-	#Define all_skyprms as an array of each regions sky value plus its RMS value
-	all_skyprms = np.array(all_skys)+np.array(all_rms)
 	bad_ind = []
-	#Get list of bad indicies (that arent bad pixel values) and set these sky values to nan
-	for sky_i, sky in enumerate(all_skys):
-		if sky > np.nanmin(all_skyprms):
-			bad_ind.append(sky_i)
-			all_skys[sky_i] = float('nan')
-			all_rms[sky_i] = float('nan')
+	if np.isnan(all_skys).all() == False:
+		#Define all_skyprms as an array of each regions sky value plus its RMS value
+		all_skyprms = np.array(all_skys)+np.array(all_rms)
+		#Get list of bad indicies (that arent bad pixel values) and set these sky values to nan
+		for sky_i, sky in enumerate(all_skys):
+			if sky > np.nanmin(all_skyprms):
+				bad_ind.append(sky_i)
+				all_skys[sky_i] = float('nan')
+				all_rms[sky_i] = float('nan')
 
 	#Define sky and RMS arrays after finished editing them
 	bkg_arr = np.array(all_skys)
@@ -136,41 +139,56 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good_list = [0], h
 
 	#Define array without the nans
 	bkg_arr_nonans = bkg_arr[goodind]
-	calc_bkg = np.nanpercentile(bkg_arr_nonans,percentile) #Calc sky is Nth percentile of arr w/out nans
-	calc_rms = np.nanmean(rms_arr) #Calc rms is just mean of all RMS values
+	if len(bkg_arr_nonans) > 0:
+		calc_bkg = np.nanpercentile(bkg_arr_nonans,percentile) #Calc sky is Nth percentile of arr w/out nans
+		calc_rms = np.nanmean(rms_arr) #Calc rms is just mean of all RMS values
+	else:
+		calc_bkg = np.nan 
+		calc_rms = np.nan
 
 	#Get INDICIES of lowest 5% of regions :)
 	N_good = len(goodind) #Number of good regions
 	N_5perc_of_good = int(N_good*0.05) #Number of lowest 5% of good regions
 	lowest5perc_ind = np.argsort(bkg_arr)[:N_5perc_of_good] #Indices of lowest 5% of good regions
 
-	#Find average x and y positions of useable subregions
-	good_x_pos = [] #List of useable x positions
-	good_y_pos = [] #List of useable y positions
-	for c in np.array(cutouts)[goodind]:
-	    x,y = c.position_original #For each useable (not NaN) cutout, get position in original data array
-	    good_x_pos.append(x)
-	    good_y_pos.append(y)
-	mean_x_pos = np.mean(good_x_pos)
-	mean_y_pos = np.mean(good_y_pos)
-	std_x_pos = np.std(good_x_pos)
-	std_y_pos = np.std(good_y_pos)
+	if N_good > 0:
+		#Find average x and y positions of useable subregions
+		good_x_pos = [] #List of useable x positions
+		good_y_pos = [] #List of useable y positions
+		for c in np.array(cutouts)[goodind]:
+		    x,y = c.position_original #For each useable (not NaN) cutout, get position in original data array
+		    good_x_pos.append(x)
+		    good_y_pos.append(y)
+		mean_x_pos = np.mean(good_x_pos)
+		mean_y_pos = np.mean(good_y_pos)
+		std_x_pos = np.std(good_x_pos)
+		std_y_pos = np.std(good_y_pos)
+	else:
+		mean_x_pos = np.nan
+		mean_y_pos = np.nan
+		std_x_pos = np.nan
+		std_y_pos = np.nan
 
 
 	### Get MEAN sky value (for errors) ###
 	all_skyprms_mean = np.array(all_skys_mean)+np.array(all_rms_mean)
 	badind_mean = []
-	for sky_i, sky in enumerate(all_skys_mean):
-		if sky > np.nanmin(all_skyprms_mean):
-			badind_mean.append(sky_i)
-			all_skys_mean[sky_i] = float('nan')
-			all_rms_mean[sky_i] = float('nan')
+	if np.isnan(all_skys_mean).all() == False:
+		for sky_i, sky in enumerate(all_skys_mean):
+			if sky > np.nanmin(all_skyprms_mean):
+				badind_mean.append(sky_i)
+				all_skys_mean[sky_i] = float('nan')
+				all_rms_mean[sky_i] = float('nan')
 	bkg_arr_mean = np.array(all_skys_mean)
 	rms_arr_mean = np.array(all_rms_mean)
 	goodind_mean = np.where(~np.isnan(bkg_arr_mean))[0].tolist()
 	bkg_arr_nonans_mean = bkg_arr_mean[goodind_mean]
-	calc_bkg_mean = np.nanpercentile(bkg_arr_nonans_mean,percentile) #Calc sky is 5th percentile of arr w/out nans
-	calc_rms_mean = np.nanmean(rms_arr_mean) #Calc rms is just mean of all RMS values
+	if len(bkg_arr_nonans_mean) > 0:
+		calc_bkg_mean = np.nanpercentile(bkg_arr_nonans_mean,percentile) #Calc sky is 5th percentile of arr w/out nans
+		calc_rms_mean = np.nanmean(rms_arr_mean) #Calc rms is just mean of all RMS values
+	else:
+		calc_bkg_mean = np.nan
+		calc_rms_mean = np.nan
 
 	N_tot = len(cutouts)
 	N_bad = len(bad_ind)

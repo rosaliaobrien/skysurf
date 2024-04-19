@@ -25,16 +25,6 @@ data is a numpy array
 axis=0 refers to the data axis that the statistics will be calculated
 
 '''
-    
-# def measureskyregion(data,axis=0):
-#     #first, perform 1 iteration of 3-sigma clipping of the data (with respect to the median)
-#     sigclipped1=sigma_clip(data,masked=False,axis=axis,cenfunc='mean',sigma_lower=5,sigma_upper=3,maxiters=1)
-#     sigclipped2=sigma_clip(data,masked=False,axis=axis,cenfunc='median',sigma_lower=5,sigma_upper=3,maxiters=10,stdfunc=lambda dt,axis=0: .5*(np.nanpercentile(dt,84.1,axis=axis)-np.nanpercentile(dt,15.9,axis=axis)))
-
-#     #return the median and standard deviation of the sigma-clipped data
-#     #return np.nanmedian(sigclipped1,axis=axis), np.nanstd(sigclipped1,axis=axis)
-#     print(np.nanmedian(sigclipped2,axis=axis),.5*(np.nanpercentile(sigclipped2,84.1)-np.nanpercentile(sigclipped2,15.9)))
-#     return np.nanmedian(sigclipped2,axis=axis),.5*(np.nanpercentile(sigclipped2,84.1)-np.nanpercentile(sigclipped2,15.9)) ,np.nanpercentile(sigclipped1,30.8,axis=axis),np.nanpercentile(sigclipped1,69.1,axis=axis)
 
 def measureskybin(data,axis=0):
     newdat=copy.copy(data)
@@ -50,11 +40,6 @@ def measureskybin(data,axis=0):
         loci=np.nanmedian(newdat)
         sigi=.5*(np.nanpercentile(newdat,84.1)-np.nanpercentile(newdat,15.9))
 
-    wf=np.where(np.isfinite(newdat))
-    #plt.hist(newdat[wf],bins=1000)
-    #plt.show()
-    #print(len(np.where(np.isfinite(newdat))[0]))
-    #return modest.mode(newdat[wf]),sigi
     return np.nanmedian(newdat),sigi
     
 def measureskyregion(data,axis=0):

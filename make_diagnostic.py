@@ -65,14 +65,13 @@ def make_subplot(ax, skysurf_sky, skysurf_rms, data, cutouts, goodind = [], badi
     
     # If the median pixel value of the data is negative, make it positive
     # Run sigma_clip one time only to make the code more efficient
-    clipped_data = sigma_clip(data, sigma = 3)
+    # Only use data where data == data so you can drop NaNs and avoid warnings
+    clipped_data = sigma_clip(data[data == data], sigma = 3)
     clipped_median = np.ma.median(clipped_data)
-    # if clipped_median < 0:
-    #     data += np.abs(clipped_median)
     
     # Find the sky and rms values you will use for plotting
     plotting_data = np.abs(data-clipped_median)
-    clipped_plotting_data = sigma_clip(plotting_data, sigma = 3)
+    clipped_plotting_data = sigma_clip(plotting_data[plotting_data == plotting_data], sigma = 3)
     plot_sky = np.ma.median(clipped_plotting_data)
     plot_rms = np.ma.std(clipped_plotting_data)  
         
