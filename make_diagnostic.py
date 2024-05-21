@@ -4,7 +4,8 @@ import numpy as np
 from astropy.stats import sigma_clip
 
 def make_plots(data, cutouts, goodind, badind, sky, rms, badpx = None, figsize = (10,10),
-    title = None, save = False, savepath = None, show = False, text_pos = 0.12):
+    title = None, save = False, savepath = None, show = False, text_pos = 0.12,
+    min_scale = 0.1, max_scale = 10, print_colorbar_params = False):
     '''
     Params
     ------
@@ -35,6 +36,12 @@ def make_plots(data, cutouts, goodind, badind, sky, rms, badpx = None, figsize =
     text_pos - float
         Defines the position under the main figure where text containing the sky, sky rms, and other 
         information will be plotted. This value represents the fraction of the total y-length of the figure.
+    min_scale, max_scale - float
+        Defines the scale by which to multiply the minimum and maximum value of the colorbar for plotting. For example, 
+        the minimum of the colorbar scale is defined to be the sky-min_scale*rms. The maximum is defined to be the 
+        sky+max_scale*rms.
+    print_colorbar_params - bool
+        Whether or not to print the colorbar params, for adjusting colorbar min and max values.
     '''
     
     #Make sure path where image will save is specified if you are choosing to save the output
@@ -42,7 +49,8 @@ def make_plots(data, cutouts, goodind, badind, sky, rms, badpx = None, figsize =
         raise Exception('Must specify savepath')
 
     fig, ax1 = plt.subplots(figsize = figsize)
-    make_subplot(ax1, sky, rms, data, cutouts, goodind = goodind, badind = badind, badpx = badpx, text_pos = text_pos)
+    make_subplot(ax1, sky, rms, data, cutouts, goodind = goodind, badind = badind, badpx = badpx, text_pos = text_pos,
+                 min_scale = min_scale, max_scale = max_scale, print_colorbar_params = print_colorbar_params)
 
     #Add title to image
     if not title == None:
@@ -57,7 +65,8 @@ def make_plots(data, cutouts, goodind, badind, sky, rms, badpx = None, figsize =
     if not show == True:
         plt.close()
 
-def make_subplot(ax, skysurf_sky, skysurf_rms, data, cutouts, goodind = [], badind = [], badpx = [], text_pos = 0.12):
+def make_subplot(ax, skysurf_sky, skysurf_rms, data, cutouts, goodind = [], badind = [], badpx = [], text_pos = 0.12,
+                 min_scale = 1, max_scale = 10, print_colorbar_params = False):
 
     # Save SKYSURF sky-SB and sky-SB RMS to show at bottom of plot
     calc_bkg = np.copy(skysurf_sky)
@@ -76,8 +85,15 @@ def make_subplot(ax, skysurf_sky, skysurf_rms, data, cutouts, goodind = [], badi
     plot_rms = np.ma.std(clipped_plotting_data)  
         
     # Set the minimum and maximum values for the colorbar
-    minv = plot_sky-plot_rms
-    maxv = plot_sky+10*plot_rms
+    minv = plot_sky-min_scale*plot_rms
+    maxv = plot_sky+max_scale*plot_rms
+    
+    if print_colorbar_params == True:
+        print('Colorbar Parameters:')
+        print('!!! Note: The sky value used for plotting ("plot_sky" and "plot_rms" is not the true sky of the image.')
+        print('plot_sky = ', plot_sky)
+        print('plot_rms = ', plot_rms)
+        print('Colorbar (min, max) = ',(minv, maxv))
         
     # Only plot if the data is not ALL NaNs
     if np.isnan(data).all() == False:
