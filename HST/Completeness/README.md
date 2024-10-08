@@ -1,5 +1,11 @@
-To use the Completeness GUI, you need to have the PyQt5 and sys packages alongside some of the ones in requirements.txt.
-This should be installed in your version of anaconda; however, I am using pyqt5 version 5.15.10.
+# SKYSURF Completeness GUI
+
+To use the KYSURF Completeness GUI, simply run
+'''
+python completeness_calculator_gui.py
+'''
+
+Requirements: PyQt5 and sys packages
 
 When the GUI loads, you should get a set of forms to fill out. The two drop down menus determine which csv files the code will draw from.
 The last three consist of parameters to fill out to get the completeness at that point. 
