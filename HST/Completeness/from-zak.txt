@@ -1,0 +1,6 @@
+Hi Rosalia:
+
+Here is the GUI code (and all the csv files) I was showing on Friday. Let me know if you would like me to change any of the settings to better fit the website. I also sent the Python file as a text file in case ASU blocks it.
+
+Best,
+Zak
