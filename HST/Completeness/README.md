@@ -1,9 +1,10 @@
 # SKYSURF Completeness GUI
 
-To use the KYSURF Completeness GUI, simply run
-'''
+To use the SKYSURF Completeness GUI, simply run
+
+```
 python completeness_calculator_gui.py
-'''
+```
 
 Requirements: PyQt5 and sys packages
 
