@@ -2,6 +2,8 @@
 
 The [SKYSURF Project](http://skysurf.asu.edu) uses Hubble's remarkable precision and stability to measure the absolute all-sky surface brightness in the 0.2-1.7 micron wavebands from over 200,000 images. This project is now succeeded by SKYSURF-IR: a JWST Cy program to do the same thing. This GitHub repository hosts various codes used for these projects.
 
+Refer to the HST folder for codes related to SKYSURF. It includes SKYSURF algorithms to measure the sky-SB and a galaxy completeness GUI for HST predictions.
+
 The SKYSURF team continues to analyze SKYSURF images. Here is a list of current publications:
 
 - [SKYSURF-1: Constraints on Zodiacal Light and Extragalactic Background Light through Panchromatic HST All-sky Surface-brightness Measurements. I. Survey Overview and Methods](https://ui.adsabs.harvard.edu/abs/2022AJ....164..141W/abstract)
