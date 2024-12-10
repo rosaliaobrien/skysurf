@@ -105,8 +105,8 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good_list = [0], h
 			rms = float('nan')
 			badpx_ind.append(ci)
 
-			sky_mean = float('nan')
-			rms_mean = float('nan')
+			# sky_mean = float('nan')
+			# rms_mean = float('nan')
         
 		else:
 
@@ -200,5 +200,11 @@ def calculate_sky(sci_data, bin_size = 64, dq_data = None, dq_good_list = [0], h
 	       'calc_sky_mean': [calc_bkg_mean], 'calc_rms_mean': [calc_rms_mean], 'sky_arr': [bkg_arr], 'rms_arr': [rms_arr], 
 	       'cutouts': [cutouts], 'lowest5perc_ind': [lowest5perc_ind], 'bad_ind': [bad_ind], 'badpx_ind': [badpx_ind],
 	       'mean_x_pos': [mean_x_pos], 'mean_y_pos': [mean_y_pos], 'std_x_pos': [std_x_pos], 'std_y_pos': [std_y_pos]}
+
+	# dic = {'calc_sky': [calc_bkg], 'calc_rms': [calc_rms], 
+	#        'N_total_regions': [N_tot], 'N_bad_regions': [N_bad], 'N_bad_px_regions': [N_badpx], 'N_good_regions': [N_good],  
+	#        'sky_arr': [bkg_arr], 'rms_arr': [rms_arr], 
+	#        'cutouts': [cutouts], 'lowest5perc_ind': [lowest5perc_ind], 'bad_ind': [bad_ind], 'badpx_ind': [badpx_ind],
+	#        'mean_x_pos': [mean_x_pos], 'mean_y_pos': [mean_y_pos], 'std_x_pos': [std_x_pos], 'std_y_pos': [std_y_pos]}
 
 	return dic
