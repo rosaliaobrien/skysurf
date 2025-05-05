@@ -12,3 +12,4 @@ The SKYSURF team continues to analyze SKYSURF images. Here is a list of current 
 - [SKYSURF-4: Panchromatic Full Sky Surface Brightness Measurement Methods and Results](https://ui.adsabs.harvard.edu/abs/2023AJ....165..237O/abstract)
 - [SKYSURF-5: Probing the Integrated Galaxy Light with a SDSS-SKYSURF Cross-matched Catalog](https://ui.adsabs.harvard.edu/abs/2024RNAAS...8..154B/abstract)
 - [SKYSURF-6: The Impact of Thermal Variations of HST on Background Light Estimates](https://ui.adsabs.harvard.edu/abs/2024arXiv240712290M/abstract)
+- [SKYSURF-7: Exploring PSF Contamination in Diffuse Sky Measurements with HST](https://iopscience.iop.org/article/10.3847/2515-5172/adbbe9/meta)
