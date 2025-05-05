@@ -27,18 +27,8 @@ function solar_sp, wl
   mn = (min(diff_arr, minval))
   idx = array_indices(diff_arr, minval)
 
-  ; Return flux and corresponding filter as a structure
-;  result = {solar_flux_MJy: flux_list[idx], wave: wave_list[idx]}
-
-  print,'Sol flux info', wl, flux_list[idx]
+;  print,'Sol flux info', wl, flux_list[idx]
 
   return, flux_list[idx]
-
-;  solar_spec_tab = {wave: wave_list,$
-;                    solar_flux_MJy: flux_list}
-;
-;  index = WHERE((solar_spec_tab.wave EQ wl), count)
-;
-;  if count gt 0 then return, solar_spec_tab.solar_flux_MJy[index[0]] else message,'Solar Spectrum for input wavelength not found.'
 
 end

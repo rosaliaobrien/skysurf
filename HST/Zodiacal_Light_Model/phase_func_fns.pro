@@ -56,6 +56,8 @@ function get_phase_integral,hg_params,phase_norm_fn=phase_norm_fn
 
 end
 
+; Function to get albedo as a function of wavelength (lam)
+; See O'Brien+2025
 function get_albedo,lam
 
   ; Define wavelength and corresponding albedo arrays
@@ -73,6 +75,9 @@ function get_albedo,lam
   return, albedo
 end
 
+
+; Function to get phase function parameters as a function of wavelength (lam)
+; See O'Brien+2025
 function get_hong_params,lam
 
   ; If lambda is less than 0.25 or greater than 1.8, then utilize phase function parameters for 0.25/ 1.8
@@ -88,8 +93,8 @@ function get_hong_params,lam
   
   hg_arr = [g1, g2, g3, w1, w2, w3]
   
-  inte = get_phase_integral(hg_arr, phase_norm_fn=1)
-  print,'Integral =', inte
+;  inte = get_phase_integral(hg_arr, phase_norm_fn=1)
+;  print,'Integral =', inte
   
   return, hg_arr
   

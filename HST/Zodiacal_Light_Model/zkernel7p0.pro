@@ -619,7 +619,7 @@ function scattfunc,det,Lambda,LOS,R,Re,SolElong,a,df,solar_irr=solar_irr
         SolFlux = 0.0
     endelse
     
-    print,'SolFlux = ',SolFlux[0]
+;    print,'SolFlux = ',SolFlux[0]
 
     if (det le 2) then begin
       ;
