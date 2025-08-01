@@ -41,12 +41,9 @@
 ;
 ;     zpar=zpar - array of zodi model params.  If not specified, the
 ;                 default will be restored from zpars.xdr
-;     no_colcorr=no_colcorr - if set, the result will be actual
-;                  intensity at the specified wavelength(s) instead of
-;                  quoted intensity for a spectrum nu*F_nu = constant
 ;              
 ;---------------------------------------------------------------------
-function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,no_colcorr=no_colcorr,solar_irr=solar_irr
+function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,solar_irr=solar_irr
 
 if (n_elements(zpar) eq 0) then begin
     aend    = 0
@@ -62,19 +59,43 @@ endif
 
 ; Array of DIRBE wavelengths
 dbwave = [1.25,2.2,3.5,4.9,12,25,60,100,140,240]
-dbwave[0] = lambda ; Modify dbwave this way to avoid breaking the code elsewhere
 
 ; Use the SKYSURF (O'Brien+2025) albedo and phase function
 if phase_type eq 'skysurf' then begin
+  
+  
+  dbwave[0] = lambda ; Modify dbwave this way to avoid breaking the code elsewhere
+  
   albedo = get_albedo(lambda)
   hong_params = get_hong_params(lambda)
-;  print,lambda,albedo,hong_params
-  zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params)
+  
+  if lambda gt 1.6 then begin
+    
+    mult = get_mult(lambda)
+    hong_params[-3:*] = hong_params[-3:*]*mult
+    
+    emm = get_emiss(lambda)
+    
+    zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params,E1=emm)
+  
+  endif else begin
+  
+    zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params)
+  
+  endelse
+  
 endif
 
 data = mk_zdata(lambda,day,lon,lat)
 
-zkernel,data,zpar,z,no_colcorr=no_colcorr,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
+;     no_colcorr=no_colcorr - if set, the result will be actual
+;                  intensity at the specified wavelength(s) instead of
+;                  quoted intensity for a spectrum nu*F_nu = constant
+if phase_type eq 'skysurf' then begin
+  zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
+endif else if phase_type eq 'kelsall' then begin
+  zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
+endif
 
 ; Only return up to 6 decimal places
 rounded_z_str = STRING(z, FORMAT='(F0.7)')
