@@ -3,14 +3,14 @@
 This is an IDL model of the SKYSURF Zodiacal Light model (see O'Brien et al. 2025). Please refer to run_model.pro for example usage.
 
 To run:
-'''
+```
 zodi_intensity = get_zmod(wavelength,"skysurf",day,lon,lat)
-'''
+```
 
 It can also be run in the original Kelsall et al. 1998 mode:
-'''
+```
 zodi_intensity = get_zmod(wavelength,"skysurf",day,lon,lat)
-'''
+```
 
 Inputs:
 	lambda     - [float] wavelength in microns
@@ -23,19 +23,16 @@ Inputs:
 	day        - [arr] 1990 day number(s), where 1.0 = 1 Jan 1990
 	lon        - [arr] ecliptic longitude(s)
 	lat        - [arr] ecliptic latitude(s)
-
 	note: lambda, day, lon, lat can be any mixture of scalars or arrays, 
            but all arrays must be of same length.
 
 Outputs:
-
 	zodi - scalar or array of zodi model intensity in MJy sr-1
 				For comparison with DIRBE data, this is 'quoted' intensity
 				at the nominal wavelength(s) for an assumed source
-				spectrum nu*F_nu = constant
+				spectrum nu\*F_nu = constant
 
 Optional Keyword Inputs:
-
 	zpar=zpar - array of zodi model params.  If not specified, the
 				default will be restored from zpars.xdr
 	solar_irr - [float] solar irradiance (in MJy/sr) corresponding to a 
