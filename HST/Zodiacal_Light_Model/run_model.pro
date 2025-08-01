@@ -16,4 +16,32 @@ plt = SCATTERPLOT(lat,zodi_result_skysurf,XTITLE='Ecliptic Latitude [deg]',YTITL
                   font_size = 15, SYM_COLOR = 'blue')
 plt = SCATTERPLOT(lat,zodi_result_kelsall, overplot = 1, SYM_COLOR = 'red')
 
+
+
+
+
+; Try running it on a range of wavelengths
+; 
+; Note that the SKYSURF version is only reliable for HSTs nominal wavelengths (0.3--1.7 microns) 
+; and Sun angles greater than 80 deg
+
+; Define array of wavelengths
+wave_arr = [0.2, 0.3, 0.5, 0.7, 1.0, 1.5, 2.0, 2.5, 3.0]
+
+; Initialize empty array to populate zodi values
+zodi_skysurf = []
+
+; Loop through all wavelengths
+FOR i = 0, N_ELEMENTS(wave_arr)-1 DO BEGIN
+  wave = wave_arr[i]
+
+  ; Assume day = 100, lon = 100, lat = 90
+  z_skysurf = get_zmod(wave, "skysurf", 100, 180, 90)
+
+  zodi_skysurf = [zodi_skysurf, z_skysurf]
+ENDFOR
+
+; Plot and compare the two models
+plt = plot(wave_arr,zodi_skysurf,XTITLE='Ecliptic Latitude [deg]',YTITLE='Zodiacal Light [MJy sr!u-1!n]', font_size = 15)
+
 end
