@@ -41,6 +41,8 @@
 ;
 ;     zpar=zpar - array of zodi model params.  If not specified, the
 ;                 default will be restored from zpars.xdr
+;     solar_irr - [float] solar irradiance (in MJy/sr) corresponding to a 
+;                 bandpass
 ;              
 ;---------------------------------------------------------------------
 function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,solar_irr=solar_irr
