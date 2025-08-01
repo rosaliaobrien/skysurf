@@ -13,6 +13,7 @@ zodi_intensity = get_zmod(wavelength,"skysurf",day,lon,lat)
 ```
 
 Inputs:
+
 	lambda     - [float] wavelength in microns
 	phase_type - [str] "kelsall" or "skysurf"
 				Whether to use the standard Kelsall+1998 phase function 
@@ -27,12 +28,14 @@ Inputs:
            but all arrays must be of same length.
 
 Outputs:
+
 	zodi - scalar or array of zodi model intensity in MJy sr-1
 				For comparison with DIRBE data, this is 'quoted' intensity
 				at the nominal wavelength(s) for an assumed source
 				spectrum nu\*F_nu = constant
 
 Optional Keyword Inputs:
+
 	zpar=zpar - array of zodi model params.  If not specified, the
 				default will be restored from zpars.xdr
 	solar_irr - [float] solar irradiance (in MJy/sr) corresponding to a 
