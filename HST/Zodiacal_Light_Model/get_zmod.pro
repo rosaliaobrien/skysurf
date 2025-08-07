@@ -47,6 +47,11 @@
 ;---------------------------------------------------------------------
 function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,solar_irr=solar_irr
 
+if lambda GT 3.5 then begin
+    message, '!!! This code does not work at lambda > 3.5 micron.'
+endif
+
+
 if (n_elements(zpar) eq 0) then begin
     aend    = 0
     astart  = 0
@@ -93,11 +98,7 @@ data = mk_zdata(lambda,day,lon,lat)
 ;     no_colcorr=no_colcorr - if set, the result will be actual
 ;                  intensity at the specified wavelength(s) instead of
 ;                  quoted intensity for a spectrum nu*F_nu = constant
-if phase_type eq 'skysurf' then begin
-  zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
-endif else if phase_type eq 'kelsall' then begin
-  zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
-endif
+zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
 
 ; Only return up to 6 decimal places
 rounded_z_str = STRING(z, FORMAT='(F0.7)')
