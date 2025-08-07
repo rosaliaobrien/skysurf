@@ -219,16 +219,9 @@ if (n_elements(init) eq 0) then begin
     ;
     ; Read Exp. Supp. Table for BB at P=0
     ;
-; Hardcode the file location
-;    findpro,'zkernel',/noprint,dirlist=dirlist
-;    if (dirlist(0) ne '') then begin
-;        case (!version.os) of
-;          'vms' : infile = dirlist(0) + 'colcorr.tab'
-;          else  : infile = dirlist(0) + '/' + 'colcorr.tab'
-;        endcase
-;    endif else infile = 'bafsci2:[dbswg.zl.zmodel.alpha]colcorr.tab'
-    infile = 'colcorr.tab'
-    print,'Reading color correction file: ',infile
+
+;    infile = 'colcorr.tab'
+;    print,'Reading color correction file: ',infile
 
     fmt    = '(f,f,f,f,f,f,f,f,f,f,f)'
     readcol,infile,form=fmt,intemp,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10
@@ -423,7 +416,9 @@ function thermfunc,det,Lambda,R,a,df,no_colcorr=no_colcorr
     To1      = a(0)
     To2      = a(1)
     Kappa    = a(2)
-    Delta    = a(3)
+    Delta    = a(3) ; Temperature power law component 
+    ; Remember: The temperature falls off as R^Delta, so the temperature for each iteration
+    ; along the line of site is different!
 
     ;
     ; Conversion from W/cm^2/Sr (Nu Bnu) to MJy/Sr (Bnu)
@@ -2253,8 +2248,6 @@ simpint,0., RANGE,los,gqwts,stepsize=0.025
     ; -------------------------------------------------------------------
     Dens_C = zcloud(x,y,z,R,aDens_C,dDens_C,func=FuncIndx)
     Src_C  = zsrcfunc(Det,Scatt,Therm,aSrc_C,dSrc_C,dSrc_dScatt_C,dSrc_dTherm_C,phase_type)
-;    print,'Src_C = ', Src_C[0]
-;    print,'aSrc_C = ', aSrc_C[0]
 
     ;
     ; Calculate Density and Source Associated with Dust Bands
