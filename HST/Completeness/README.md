@@ -1,12 +1,13 @@
-# SKYSURF Completeness GUI
+# SKYSURF-Completeness-GUI
+Completeness calculator to find the 50% completeness limits and completeness percentages
 
-To use the SKYSURF Completeness GUI, simply run
 
-```
-python completeness_calculator_gui.py
-```
+Magnitude Calculation:
+Given the object size, background, and exposure time for a filter, this tool calculates the 50% completeness magnitude.
 
-Specify the HST camera, filter, object size (in arcsec), background level (in counts per sec), and exposure time (in sec).
-A good example is using size of 1 arcsec, 1000 seconds of exposure time, and 0.1 for background. The 50% completeness magnitude is then displayed.
 
-Requirements: PyQt5 and sys packages
+Probability Calculation:
+Given the object size, background, and exposure time for a filter, this tool calculates the completeness percentage at a specific object magnitude. We accomplish this by calculating the 50% completeness magnitude for the object and comparing it with the measured 50% completeness extrapolated to the object's size. Subtracting these two completeness magnitudes gives the delta which we shift the calculated completeness magnatudes to follow the data for non 50% completeness values. We arrive at an estimation for completeness percentage that is relatively accurate.
+
+
+Packages: Requires sys, PyQt5, numpy, and pandas
