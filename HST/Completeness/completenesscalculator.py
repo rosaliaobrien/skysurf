@@ -2,6 +2,7 @@
 #If you use this, please cite Goisman et al. 2025
 
 import numpy as np
+import os
 from scipy.special import erfc, erfcinv
 p9arg=erfcinv(2*0.9)
 def completeness(camera,filt,exp,size,background=-1):
@@ -11,7 +12,7 @@ def completeness(camera,filt,exp,size,background=-1):
         if len(wpoint[0])>0:
             print('Fitting function results unreliable for size<0.01", defaulting to point-source size of 0.01"')
             usesize=np.array(size)
-            usesize[w]=0.01
+            usesize[wpoint]=0.01
         else:
             usesize=np.array(size)
     else:
@@ -20,8 +21,11 @@ def completeness(camera,filt,exp,size,background=-1):
             usesize=0.01
         else:
             usesize=size
-    dat=np.genfromtxt('completeness_data/'+camera.upper()+'table.csv',delimiter=',',dtype='str')
-    date=np.genfromtxt('completeness_data/'+camera.upper()+'_elephant_data.csv',delimiter=',',dtype='str')
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(script_dir, "data", camera.upper() + "table.csv")
+    dat=np.genfromtxt(csv_path,delimiter=',',dtype='str')
+    elephant_csv_path = os.path.join(script_dir, "data", camera.upper() + "_elephant_data.csv")
+    date=np.genfromtxt(elephant_csv_path,delimiter=',',dtype='str')
     rowi=np.where(dat[1:,0]=='ACS '+filt.upper())[0]
     if len(rowi)==0:
         print('Filter not included')
@@ -62,7 +66,7 @@ def probdetect(camera,filt,exp,size,magnitude,background=-1):
         if len(wpoint[0])>0:
             print('Fitting function results unreliable for size<0.01", defaulting to point-source size of 0.01"')
             usesize=np.array(size)
-            usesize[w]=0.01
+            usesize[wpoint]=0.01
         else:
             usesize=np.array(size)
     else:
