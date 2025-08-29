@@ -42,6 +42,29 @@ FOR i = 0, N_ELEMENTS(wave_arr)-1 DO BEGIN
 ENDFOR
 
 ; Plot and compare the two models
-plt = plot(wave_arr,zodi_skysurf,XTITLE='Ecliptic Latitude [deg]',YTITLE='Zodiacal Light [MJy sr!u-1!n]', font_size = 15)
+plt = plot(wave_arr,zodi_skysurf,XTITLE='Ecliptic Latitude [deg]',$
+  YTITLE='Zodiacal Light [MJy sr!u-1!n]', font_size = 15, color = 'green')
+
+
+
+
+
+
+; Plot the isotropic-like cloud!
+
+isocloud = []
+; Loop through all wavelengths
+FOR i = 0, N_ELEMENTS(wave_arr)-1 DO BEGIN
+  wave = wave_arr[i]
+
+  ; Assume day = 100, lon = 100, lat = 90
+  iso_skysurf = get_zmod(wave, "skysurf", 100, 180, 90,new_iso_comp=1,iso_comp_only=1)
+
+  isocloud = [isocloud, iso_skysurf]
+ENDFOR
+
+; Plot and compare the two models
+plt = plot(wave_arr,isocloud,overplot = 1, color = 'purple')
+
 
 end

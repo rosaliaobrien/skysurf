@@ -43,9 +43,13 @@
 ;                 default will be restored from zpars.xdr
 ;     solar_irr - [float] solar irradiance (in MJy/sr) corresponding to a 
 ;                 bandpass
+;     new_iso_comp - If this keyword is set, the final intensity will include
+;                    an isotropic-like component (see O'Brien et al. 2025).
+;     iso_comp_only - If this keyword is set, the final intensity will represent
+;                     only the isotropic-like component.
 ;              
 ;---------------------------------------------------------------------
-function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,solar_irr=solar_irr
+function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
 
 if lambda GT 3.5 then begin
     message, '!!! This code does not work at lambda > 3.5 micron.'
@@ -98,7 +102,7 @@ data = mk_zdata(lambda,day,lon,lat)
 ;     no_colcorr=no_colcorr - if set, the result will be actual
 ;                  intensity at the specified wavelength(s) instead of
 ;                  quoted intensity for a spectrum nu*F_nu = constant
-zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
+zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
 
 ; Only return up to 6 decimal places
 rounded_z_str = STRING(z, FORMAT='(F0.7)')

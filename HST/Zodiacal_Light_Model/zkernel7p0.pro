@@ -1444,6 +1444,164 @@ endif else Dens = x*0
 return,Dens
 end
 
+;--------------------------------------------------------------
+; Function new_isocloud
+;
+; Returns the number density of an isotropic-like cloud.
+; Copied the function for the smooth cloud, and modified.
+;
+; Added by: Rosalia O'Brien, Fall 2025
+;
+; Inputs:
+;   x,y,z - heliocentric cartesian coordinates
+;   R     - sqrt(x^2+y^2+z^2)
+;   Theta - Earth mean longitude
+;   a     - Model parameters
+;
+;--------------------------------------------------------------
+function new_isocloud,x,y,z,R,a,No,Alpha
+
+  ;  No = 1e-42
+  
+  FuncIndx = 2
+
+  if (No ne 0.0) then begin
+
+    d2r = !pi/180.
+
+    ;    Alpha    = -50.0
+    Beta     = 0.0
+    Gamma    = 0.0
+    Mu       = a(4)
+    Mu2      = a(5)
+    Mu3      = a(6)
+    Mu4      = a(7)
+    Mu5      = a(8)
+    Mu6      = a(9)
+    Mu7      = a(10)
+    Mu8      = a(11)
+    Mu9      = a(12)
+    Mu10     = a(13)
+
+    Omega    = 0.0 * d2r
+    Incl     = 0.0 * d2r
+    Xo       = 0.0
+    Yo       = 0.0
+    Zo       = 0.0
+
+    ;
+    ; Some frequently used geometry terms
+    ;
+    sino = sin(Omega)
+    coso = cos(Omega)
+    sini = sin(Incl)
+    cosi = cos(Incl)
+
+    ;
+    ; Translate origin from Sun to cloud center.
+    ;
+    Xp  = X - Xo
+    Yp  = Y - Yo
+    Zp  = Z - Zo
+    Rc  = sqrt( Xp^2 + Yp^2 + Zp^2 )
+
+    ;
+    ; Rotate into coord system of cloud to determine Z-height in cloud
+    ; (Zc) and radial distance in cloud symetry plane (Rc).
+    ; Perform rotation of Omega around Z-Axis to align X with cloud
+    ; line-of-nodes. Then, perform Incl rotation around X-Axis.
+    ;
+    Zc   = sino*sini*Xp - coso*sini*Yp + cosi*Zp
+    Zeta = abs(Zc/Rc)
+
+    ;
+    ; Compute Radial power-law parameter
+    ; Mark6p2  sets this to Rc, not R    20 May 1996
+    ; Mark6p7 allows the polynomial mods only beyond a cutoff radius
+    ; Mark6p8 puts is back the way it was, but keeps insistence on positive
+    ;         coeffs -- uses R, not Rc
+    ;
+    AlphaR = Alpha + ( Mu6^2*(R-1.) + Mu7^2*(R-1.)^2 + Mu8^2*(R-1.)^3 )
+    ;protection against overflow 12May1996
+    stuff = where(AlphaR gt 50.)
+    if (stuff(0) ne -1) then AlphaR(stuff) = 50.
+
+    ;
+    ; Radial and Latitudinal Density Distribution
+    ;
+    case FuncIndx of
+
+      ;
+      ; John Good Density Function
+      ;
+      0 : begin
+        Dc     = sqrt(Rc^2 - Zc^2)
+        ZoD    = abs(Zc/Dc)
+        ZoD2G  = ZoD^Gamma
+        Dens_Cloud_Vert = exp( -Beta * ZoD2G )
+        Dens_Cloud_Rad  = 1./Dc^AlphaR
+      end
+
+      ;
+      ; Modified Fan Density Function
+      ;
+      1 : begin
+        Zeta2G  = Zeta^Gamma
+        Dens_Cloud_Vert = exp( -Beta * Zeta2G )
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Widened Modified Fan Density Function
+      ;
+      2 : begin
+        GZR    = (0.5*Zeta^2/Mu) * (Zeta lt Mu) + $
+          (Zeta-0.5*Mu)   * (Zeta ge Mu)
+        GZR2G  = GZR^Gamma
+        Dens_Cloud_Vert = exp( -Beta * GZR2G )
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Ellipsoidal Density Function
+      ;
+      3 : begin
+        Bterm = (1. + (Beta*Zeta)^2)
+        Dens_Cloud_Vert = 1./Bterm^Gamma
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Cosine (Sombrero)
+      ;
+      4 : begin
+        cosB   = sqrt(1-Zeta^2)
+        cosB2G = cosB^Gamma
+        Dens_Cloud_Vert = (1. + Beta * cosB2G)/(1. + Beta)
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Modified Fan Density Function with Polynomial Z-height
+      ;
+      5 : begin
+        aZ = abs(Z)
+        BetaZ = Beta + Mu3*aZ + Mu4*aZ^2 + Mu5*aZ^3
+        Dens_Cloud_Vert = exp( -BetaZ * Zeta )
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+    endcase
+    ;
+    ; Total Density of Cloud Component
+    ;
+    Dens = No * Dens_Cloud_Vert * Dens_Cloud_Rad
+
+  endif else Dens = x*0
+
+  return,Dens
+end
+
 
 ;
 ;----------------------------------------------------------------------------
@@ -1983,7 +2141,7 @@ end
 ;
 ;-------------------------------------------------------------------------------
 ;
-pro zkernel,data,a,phase_type,f,df,indxpar=indxpar,losinfo=losinfo,no_colcorr=no_colcorr,dbwave=dbwave,solar_irr=solar_irr
+pro zkernel,data,a,phase_type,f,df,indxpar=indxpar,losinfo=losinfo,no_colcorr=no_colcorr,dbwave=dbwave,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
 
 if (keyword_set(losinfo)) then want_los_info=1 else want_los_info=0
 
@@ -2266,6 +2424,24 @@ simpint,0., RANGE,los,gqwts,stepsize=0.025
     ; -------------------------------------------------------------------
     Dens_RB = solring(x,y,z,R,Earth_Mean_Lon(ilos),aDens_RB,dDens_RB)
     Src_RB  = zsrcfunc(Det,Scatt,Therm,aSrc_RB,dSrc_RB,dSrc_dScatt_RB,dSrc_dTherm_RB,phase_type)
+    
+    ; Isotropic-like cloud component (optional)
+    Dens_new = Dens_C*0
+    if (keyword_set(new_iso_comp)) then begin
+      No = 5.62e-10
+      Alpha = -2.02
+      Dens_new = new_isocloud(x,y,z,R,aDens_C,No,Alpha)
+    endif
+    
+    if (keyword_set(iso_comp_only)) then begin
+      Dens_C = Dens_C*0
+      Dens_B1 = Dens_B1*0
+      Dens_B2 = Dens_B2*0
+      Dens_B3 = Dens_B3*0
+      Dens_B4 = Dens_B4*0
+      Dens_RB = Dens_RB*0
+;      print,Dens_C
+    endif
 
     ;
     ; Calculate Total Zodi Brightness per LOS Element
@@ -2275,7 +2451,8 @@ simpint,0., RANGE,los,gqwts,stepsize=0.025
            Src_B2 * Dens_B2 + $
            Src_B3 * Dens_B3 + $
            Src_B4 * Dens_B4 + $
-           Src_RB * Dens_RB
+           Src_RB * Dens_RB + $
+           Src_C  * Dens_new
    
     ;
     ; Integrate Along LOS to Get Total Intensity
