@@ -2428,8 +2428,8 @@ simpint,0., RANGE,los,gqwts,stepsize=0.025
     ; Isotropic-like cloud component (optional)
     Dens_new = Dens_C*0
     if (keyword_set(new_iso_comp)) then begin
-      No = 5.62e-10
-      Alpha = -2.02
+      No = 1.356e-9
+      Alpha = -1.46
       Dens_new = new_isocloud(x,y,z,R,aDens_C,No,Alpha)
     endif
     
