@@ -1,0 +1,12 @@
+# Core dependencies
+numpy>=1.19.0
+scipy>=1.7.0
+
+# Optional: For visualization (tutorial notebook)
+matplotlib>=3.0.0
+
+# Optional: Development tools
+pytest>=6.0.0
+pytest-cov>=2.0.0
+black>=21.0.0
+flake8>=3.9.0
