@@ -51,10 +51,11 @@
 ;---------------------------------------------------------------------
 function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
 
+if phase_type eq 'skysurf' then begin
 if lambda GT 3.5 then begin
     message, '!!! This code does not work at lambda > 3.5 micron.'
 endif
-
+endif
 
 if (n_elements(zpar) eq 0) then begin
     aend    = 0

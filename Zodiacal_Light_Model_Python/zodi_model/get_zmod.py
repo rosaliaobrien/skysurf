@@ -166,8 +166,9 @@ def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_c
     """
     
     # Check wavelength restriction for current implementation
-    if lambda_ > 3.5:
-        raise ValueError("This code does not work at lambda > 3.5 micron.")
+    if phase_type == 'skysurf':
+        if lambda_ > 3.5:
+            raise ValueError("This code does not work at lambda > 3.5 micron.")
     
     # Input validation
     lambda_ = np.atleast_1d(lambda_)
