@@ -1,12 +1,12 @@
-# ZodiModel: Zodiacal Light Modeling Package
+# ZodiSURF: SKYSURF Zodiacal Light Modeling Package
 
 Python implementation of the Kelsall et al. (1998) zodiacal light model with SKYSURF enhancements (O'Brien et al. 2025).
 
 ## Features
 
-- **Dual Phase Functions**: Kelsall (1998) and SKYSURF (2025)
-- **Wavelength Range**: 0.2-240 μm
-- **High Accuracy**: 0.0002% difference from IDL reference
+- Ability to run the Kelsall et al. (1998) version and the SKYSURF version (O'Brien+2025).
+- **Wavelength Range**: 1.25-240 μm for the Kelsall model; 0.2-1.7 μm for the SKYSURF model.
+- **High Accuracy**: 0.0002% difference from IDL package.
 - **Vectorized Processing**: Scalar and array inputs
 
 ## Installation
