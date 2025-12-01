@@ -664,7 +664,7 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, sol
             SolFlux = SolFlux1AU[det] / R**2
         else:
             SolFlux = 0.0
-        print(f"SolFlux: {SolFlux}")
+        # print(f"SolFlux: {SolFlux}")
         # Phase angle calculation (match IDL logic)
         phase_ang = np.arcsin(np.clip(Re / R * np.sin(SolElong), -1.0, 1.0))
         itest = (LOS >= Re * np.cos(SolElong))
@@ -690,11 +690,11 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, sol
             phase_func, _ = phasefunc(scat_ang, aaa)
 
         phase_func = np.asarray(phase_func)
-        print(f"phase_func: {phase_func}")
-
+        # print(f"phase_func: {phase_func}")
+# 
         # Scattered light calculation using conditional solar flux
         Scatt = SolFlux * phase_func
-        print(f"Scatt: {Scatt}")
+        # print(f"Scatt: {Scatt}")
         
         if df_out is not None:
             # Derivatives with respect to phase function parameters
@@ -1463,7 +1463,7 @@ def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colco
 
         if Det >= 0:
             Scatt = scattfunc(phase_type, Det, Lambda, los, R, Re, SolElong[ilos], aScatt, solar_irr=solar_irr)
-            print(f"Scatt: {Scatt}")
+            # print(f"Scatt: {Scatt}")
         else:
             Scatt = 0.0
         Therm, _ = thermfunc(Det, Lambda, R, aTherm, no_colcorr=no_colcorr)
@@ -1602,8 +1602,8 @@ def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colco
                     if ipar >= 0:
                         df[ilos, ipar] += np.sum(gqwts * dSrc_RB[:, ii] * Dens_RB)
 
-        if (ilos + 1) % nmsg == 0:
-            print(f'LOS # {ilos}')
+        # if (ilos + 1) % nmsg == 0:
+        #     print(f'LOS # {ilos}')
 
     if want_los_info:
         return losdata

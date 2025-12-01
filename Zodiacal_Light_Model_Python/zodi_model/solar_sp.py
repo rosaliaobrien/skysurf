@@ -70,5 +70,5 @@ def solar_sp(wl):
     # Find closest wavelength
     diff_arr = np.abs(wave_list - wl)
     idx = np.argmin(diff_arr)
-    print(idx)
+    # print(idx)
     return flux_list[idx]

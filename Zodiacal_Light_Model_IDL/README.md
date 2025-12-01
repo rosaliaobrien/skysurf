@@ -46,6 +46,4 @@ This model was written so that it can work between wavelengths 0.2--4.9 microns.
 
 For ease of use, the solar spectrum incorporated into this model has a set bandwidth of 0.1 microns. For the best accuracy or finer spectral resolution, we highly recommend that the user inputs their own spectral irradiance (in units of MJy) for each wavelength bin. 
 
-The SKYSURF model is only reliable at:
-	- wavelengths between 0.2 and 2.7 microns.
-	- Sun angles greater than 80 deg.
+The SKYSURF model is only reliable at wavelengths between 0.2 and 1.7 microns and Sun angles greater than 80 deg.

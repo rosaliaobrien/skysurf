@@ -2,7 +2,7 @@ import numpy as np
 import json
 from scipy.interpolate import interp1d
 
-from zodi_model.zkernel6p8 import zkernel, get_parnames
+from zodi_model.zkernelpy import zkernel, get_parnames
 from zodi_model.skysurf_params import get_albedo, get_hong_params, get_mult, get_emiss, put_zpar
 from zodi_model.solar_sp import solar_sp
 
@@ -178,8 +178,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_c
     if phase_type not in ['kelsall', 'skysurf']:
         raise ValueError("phase_type must be either 'kelsall' or 'skysurf'")
 
-    if np.any(lon < -180) or np.any(lon > 180):
-        raise ValueError("Longitude (lon) must be in the range -180 to 180 degrees.")
+    if np.any(lon < 0) or np.any(lon > 360):
+        raise ValueError("Longitude (lon) must be in the range 0 to 360 degrees.")
     if np.any(lat < -90) or np.any(lat > 90):
         raise ValueError("Latitude (lat) must be in the range -90 to 90 degrees.")
 
