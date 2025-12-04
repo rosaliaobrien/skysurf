@@ -1,4 +1,4 @@
-function put_zpar, aend_in, PF1_C0, PF1_C1, PF1_Ka, A1, det1=det1, hg3=hg3, E1=E1
+function put_zpar, aend_in, PF1_C0, PF1_C1, PF1_Ka, A1, det1=det1, hg3=hg3, update_emiss=update_emiss, E1=E1
 
 ; creates new aend=zpars arrat with new phase function and albedo for channel 1
 
@@ -19,9 +19,8 @@ aend[1+3*offset:3+3*offset] = [PF1_C0,PF1_C1,PF1_Ka]
 
 ; Update the albedos for SKYSURF
 aend[[33,59,85,111,137,170]+offset] = A1
-
-; Update Emissivity when using extrapolating "skysurf" 
-if (keyword_set(E1)) then begin
+  
+if (keyword_set(update_emiss)) then begin
 aend[[33+4,59+4,85+4,111+4,137+4,170+4]+offset] = E1
 endif
 

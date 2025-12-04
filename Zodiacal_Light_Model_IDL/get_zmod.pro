@@ -88,7 +88,7 @@ if phase_type eq 'skysurf' then begin
     
     emm = get_emiss(lambda)
     
-    zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params,E1=emm)
+    zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params,update_emiss=1,E1=emm)
   
   endif else begin
   
