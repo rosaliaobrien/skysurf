@@ -4,6 +4,10 @@ Verification Script: Python vs IDL Accuracy
 Demonstrates that Python implementation matches IDL reference to <0.0002% accuracy
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 from zodi_model.get_zmod import get_zmod
 
@@ -72,13 +76,11 @@ def verify_accuracy():
 
     print(f"Accuracy Requirement:  < {requirement}%")
     print(f"Maximum Error:         {max_error:.6f}%")
-    print(f"Improvement Factor:    {requirement / max_error:.1f}x")
     print()
 
     if max_error < requirement:
         print("VERIFICATION SUCCESSFUL")
         print(f"   Python implementation matches IDL to {max_error:.4f}% accuracy")
-        print(f"   This exceeds the <1% requirement by {requirement/max_error:.0f}x!")
     else:
         print("VERIFICATION FAILED")
         print(f"   Error {max_error:.4f}% exceeds {requirement}% requirement")

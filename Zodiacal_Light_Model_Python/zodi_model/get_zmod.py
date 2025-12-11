@@ -134,7 +134,7 @@ def mk_zdata(lambda_, day, lon, lat):
 
     return zdata
 
-def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_colcorr=False):
+def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_colcorr=False, new_iso_comp=False, iso_comp_only=False):
     """
     Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity 
     for a given set of LOS, Wavelength, and Time.
@@ -158,7 +158,11 @@ def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_c
         Solar irradiance (in MJy/sr) corresponding to bandpass
     no_colcorr : bool, optional
         If True, returns actual intensity instead of quoted intensity
-        
+    new_iso_comp : bool, optional
+        If True, include isotropic component (default: False)
+    iso_comp_only : bool, optional
+        If True, model ONLY isotropic component (default: False)
+
     Returns:
     --------
     array_like
@@ -221,7 +225,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_c
     
     # Call kernel with phase_type parameter
     zodi = zkernel(data, zpar, phase_type=phase_type, no_colcorr=True,
-                   dbwave=dbwave, solar_irr=solar_irr)
+                   dbwave=dbwave, solar_irr=solar_irr,
+                   new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only)
     # NOTE: Correction factors were removed after discovering that Python
     # matches the raw IDL zkernel output exactly (0.11165 MJy/sr).
     # The discrepancy was with IDL's get_zmod wrapper (0.11494 MJy/sr),

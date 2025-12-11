@@ -963,6 +963,52 @@ def zcloud(x, y, z, R, a, df_out=None, FuncIndx=0):
 '''''
 
 
+def new_isocloud(x, y, z, R, a):
+    """
+    Isotropic zodiacal cloud component.
+    Uses Widened Modified Fan (FuncIndx=2) with Beta=0, Gamma=0.
+
+    Parameters:
+    - x, y, z, R: Heliocentric coordinates and distance
+    - a: Cloud parameters (uses Mu6, Mu7, Mu8 for radial correction)
+
+    Returns: Isotropic component density
+    """
+    # Hardcoded parameters
+    No = 1.356e-9  # Normalization
+    Alpha = -1.46  # Radial power law
+    Beta = 0.0  # No latitude variation
+    Gamma = 0.0  # No latitude variation
+
+    # Hardcoded geometry (centered on Sun)
+    Omega = 0.0
+    Incl = 0.0
+    Xo = 0.0
+    Yo = 0.0
+    Zo = 0.0
+
+    x = np.asarray(x)
+    y = np.asarray(y)
+    z = np.asarray(z)
+    R = np.asarray(R)
+
+    # Extract Mu parameters for radial correction
+    Mu6 = a[9]
+    Mu7 = a[10]
+    Mu8 = a[11]
+
+    # Compute radial power-law with polynomial correction
+    dR = R - 1.0
+    AlphaR = Alpha + (Mu6**2 * dR + Mu7**2 * dR**2 + Mu8**2 * dR**3)
+    AlphaR = np.minimum(AlphaR, 50.0)  # Prevent overflow
+
+    # Since Omega=Incl=0 and Xo=Yo=Zo=0, Rc = R
+    # With Beta=0, Gamma=0: Dens_Cloud_Vert = 1
+    # Final density: pure radial power law
+    Dens = No / R**AlphaR
+
+    return Dens
+
 
 def migband(x, y, z, R, a, want_partials=False):
     """
@@ -1313,7 +1359,7 @@ def zsrcfunc(det, Scatt, Therm, a, df_out=None, phase_type='kelsall'):
     return Source
 
 
-def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colcorr=False, dbwave=None, solar_irr=None):
+def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colcorr=False, dbwave=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
     want_los_info = losinfo
     # print('a:',a)
     RMAX = 5.2
@@ -1474,6 +1520,12 @@ def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colco
         Source = Albedo * Scatt + Emiss * (1.0 - Albedo) * Therm
         Src_C= zsrcfunc(Det, Scatt, Therm, aSrc_C, phase_type=phase_type)
 
+        # Isotropic component
+        if new_iso_comp:
+            Dens_new = new_isocloud(X, Y, Z, R, aDens_C)
+        else:
+            Dens_new = np.zeros_like(R)
+
         Dens_B1, dDens_B1 = migband(X, Y, Z, R, aDens_B1)
         Src_B1 = zsrcfunc(Det, Scatt, Therm, aSrc_B1, phase_type=phase_type)
 
@@ -1488,13 +1540,23 @@ def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colco
 
         Dens_RB, dDens_RB = solring(X, Y, Z, R, Earth_Mean_Lon[ilos], aDens_RB)
         Src_RB = zsrcfunc(Det, Scatt, Therm, aSrc_RB, phase_type=phase_type)
-        Flux = (Src_C * Dens_C + Src_B1 * Dens_B1 + Src_B2 * Dens_B2 + Src_B3 * Dens_B3 + Src_B4 * Dens_B4 + Src_RB * Dens_RB)
+
+        # Isotropic component only mode
+        if iso_comp_only:
+            Dens_C = np.zeros_like(R)
+            Dens_B1 = np.zeros_like(R)
+            Dens_B2 = np.zeros_like(R)
+            Dens_B3 = np.zeros_like(R)
+            Dens_B4 = np.zeros_like(R)
+            Dens_RB = np.zeros_like(R)
+
+        Flux = (Src_C * Dens_C + Src_B1 * Dens_B1 + Src_B2 * Dens_B2 + Src_B3 * Dens_B3 + Src_B4 * Dens_B4 + Src_RB * Dens_RB + Src_C * Dens_new)
 
         # Sum the flux along the line of sight
         f[ilos] = np.sum(gqwts * Flux)
 
         if want_los_info:
-            Dens = Dens_C + Dens_B1 + Dens_B2 + Dens_B3 + Dens_RB
+            Dens = Dens_C + Dens_B1 + Dens_B2 + Dens_B3 + Dens_RB + Dens_new
             losdata.append({
                 'wave_len': Lambda,
                 'pixel_no': data[ilos]['pixel_no'],
