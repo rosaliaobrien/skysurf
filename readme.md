@@ -13,3 +13,7 @@ The SKYSURF team continues to analyze SKYSURF images. Here is a list of current 
 - [SKYSURF-5: Probing the Integrated Galaxy Light with a SDSS-SKYSURF Cross-matched Catalog](https://ui.adsabs.harvard.edu/abs/2024RNAAS...8..154B/abstract)
 - [SKYSURF-6: The Impact of Thermal Variations of HST on Background Light Estimates](https://ui.adsabs.harvard.edu/abs/2024arXiv240712290M/abstract)
 - [SKYSURF-7: Exploring PSF Contamination in Diffuse Sky Measurements with HST](https://iopscience.iop.org/article/10.3847/2515-5172/adbbe9/meta)
+- [SKYSURF-8: Modeling SKYSURF Completeness Data for Comparison to the Hubble Space Telescope Exposure Time Calculator](https://ui.adsabs.harvard.edu/abs/2025PASP..137i4501G/abstract)
+- [SKYSURF-9: The Cosmic Optical and Infrared Background from Integrated Galaxy Light Measurements](https://ui.adsabs.harvard.edu/abs/2025arXiv250703412T/abstract)
+- [SKYSURF-10: A Novel Method for Measuring Integrated Galaxy Light](https://ui.adsabs.harvard.edu/abs/2025arXiv250705323C/abstract)
+- [SKYSURF-11: A New Zodiacal Light Model Optimized for Optical Wavelengths](https://ui.adsabs.harvard.edu/abs/2025arXiv251018231O/abstract)
