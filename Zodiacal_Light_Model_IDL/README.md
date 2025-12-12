@@ -47,3 +47,29 @@ This model was written so that it can work between wavelengths 0.2--4.9 microns.
 For ease of use, the solar spectrum incorporated into this model has a set bandwidth of 0.1 microns. For the best accuracy or finer spectral resolution, we highly recommend that the user inputs their own spectral irradiance (in units of MJy) for each wavelength bin. 
 
 The SKYSURF model is only reliable at wavelengths between 0.2 and 1.7 microns and Sun angles greater than 80 deg.
+
+## Citation
+
+```bibtex
+
+@ARTICLE{OBrien_2025,
+       author = {{O'Brien}, Rosalia and {Arendt}, Richard G. and {Windhorst}, Rogier A. and {Acharya}, Tejovrash and {Calamida}, Annalisa and {Carleton}, Timothy and {Carter}, Delondrae and {Cohen}, Seth H. and {Dwek}, Eli and {Frye}, Brenda L. and et al.},
+        title = "{SKYSURF-11: A New Zodiacal Light Model Optimized for Optical Wavelengths}",
+      journal = {arXiv e-prints},
+     keywords = {Cosmology and Nongalactic Astrophysics, Earth and Planetary Astrophysics, Astrophysics of Galaxies},
+         year = 2025,
+        month = oct,
+          eid = {arXiv:2510.18231},
+        pages = {arXiv:2510.18231},
+          doi = {10.48550/arXiv.2510.18231},
+archivePrefix = {arXiv},
+       eprint = {2510.18231},
+ primaryClass = {astro-ph.CO},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv251018231O},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+```
+
+## Authors
+
+Rosalia O'Brien, Tejovrash Acharya

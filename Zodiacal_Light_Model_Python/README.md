@@ -82,13 +82,21 @@ Test: λ=1.25 μm, day=1.0, lon=0°, lat=90° → 0.114937 MJy/sr
 
 ```bibtex
 
-@ARTICLE{OBrien2025,
-   author = {{O'Brien}, R. and {Arendt}, R.~G. and {Windhorst}, R.~A. and {Acharya}, T. and others},
-   title = "{SKYSURF-11: A New Zodiacal Light Model Optimized for Optical Wavelengths}",
-   journal = {arXiv, astro-ph},
-   year = 2025,
-   eprint = {2510.18231},
-   doi = {10.48550/arXiv.2510.18231}
+@ARTICLE{OBrien_2025,
+       author = {{O'Brien}, Rosalia and {Arendt}, Richard G. and {Windhorst}, Rogier A. and {Acharya}, Tejovrash and {Calamida}, Annalisa and {Carleton}, Timothy and {Carter}, Delondrae and {Cohen}, Seth H. and {Dwek}, Eli and {Frye}, Brenda L. and et al.},
+        title = "{SKYSURF-11: A New Zodiacal Light Model Optimized for Optical Wavelengths}",
+      journal = {arXiv e-prints},
+     keywords = {Cosmology and Nongalactic Astrophysics, Earth and Planetary Astrophysics, Astrophysics of Galaxies},
+         year = 2025,
+        month = oct,
+          eid = {arXiv:2510.18231},
+        pages = {arXiv:2510.18231},
+          doi = {10.48550/arXiv.2510.18231},
+archivePrefix = {arXiv},
+       eprint = {2510.18231},
+ primaryClass = {astro-ph.CO},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv251018231O},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
 ```
 
