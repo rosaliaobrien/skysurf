@@ -51,6 +51,9 @@ results = get_zmod(1.25, 'kelsall', days, 90.0, 0.0)
 - `lon` (float/array): Ecliptic longitude (degrees)
 - `lat` (float/array): Ecliptic latitude (degrees)
 - `zpar` (array, optional): Custom parameters (256 elements)
+- `solar_irr` (float, optional): Solar irradiance (in MJy/sr) corresponding to bandpass
+- `new_iso_comp` (bool, optional): If True, include isotropic component (default: False)
+- `iso_comp_only` (bool, optional): If True, model ONLY isotropic component (default: False)
 
 **Returns:** `numpy.ndarray` - Intensity in MJy/sr
 
