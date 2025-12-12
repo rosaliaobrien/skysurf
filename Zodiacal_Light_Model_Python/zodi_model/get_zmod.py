@@ -233,7 +233,7 @@ def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_c
     # which appears to have a calibration factor built in.
     # See WAVELENGTH_DEPENDENCY_ISSUE.md for full investigation.
 
-    rounded_zodi = np.round(zodi, 7)
+    rounded_zodi = np.round(zodi, 5)
 
     return rounded_zodi
 

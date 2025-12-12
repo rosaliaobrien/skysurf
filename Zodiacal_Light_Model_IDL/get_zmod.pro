@@ -105,9 +105,11 @@ data = mk_zdata(lambda,day,lon,lat)
 ;                  quoted intensity for a spectrum nu*F_nu = constant
 zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
 
-; Only return up to 6 decimal places
-rounded_z_str = STRING(z, FORMAT='(F0.7)')
+; Only return up to 5 decimal places
+rounded_z_str = STRING(z, FORMAT='(F0.5)')
 rounded_z_float = FLOAT(rounded_z_str)
+
+;print,rounded_z_float
 
 return,rounded_z_float
 end
