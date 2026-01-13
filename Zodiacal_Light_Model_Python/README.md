@@ -9,14 +9,6 @@ Python implementation of the Kelsall et al. (1998) zodiacal light model with SKY
 - **High Accuracy**: 0.0002% difference from IDL package.
 - **Vectorized Processing**: Scalar and array inputs
 
-## Installation
-
-```bash
-git clone <repository-url>
-cd ZodiModel
-pip install -e .
-```
-
 **Requirements:** Python ≥3.7, NumPy ≥1.19, SciPy ≥1.7
 
 ## Usage
