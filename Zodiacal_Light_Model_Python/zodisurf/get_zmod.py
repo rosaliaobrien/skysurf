@@ -134,7 +134,7 @@ def mk_zdata(lambda_, day, lon, lat):
 
     return zdata
 
-def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_colcorr=False, new_iso_comp=False, iso_comp_only=False):
+def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_irr=None, no_colcorr=False, new_iso_comp=False, iso_comp_only=False):
     """
     Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity 
     for a given set of LOS, Wavelength, and Time.
@@ -152,6 +152,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_c
         Ecliptic longitude(s) in degrees
     lat : array_like
         Ecliptic latitude(s) in degrees
+    L2 : bool
+        If True, then put observer at Earth-Sun L2 (e.g., JWST)
     zpar : array_like, optional
         Array of zodi model params. If not specified, defaults are loaded
     solar_irr : float, optional
@@ -224,7 +226,7 @@ def get_zmod(lambda_, phase_type, day, lon, lat, zpar=None, solar_irr=None, no_c
     data = mk_zdata(lambda_, day, lon, lat)
     
     # Call kernel with phase_type parameter
-    zodi = zkernel(data, zpar, phase_type=phase_type, no_colcorr=True,
+    zodi = zkernel(data, zpar, phase_type=phase_type, L2 = L2, no_colcorr=True,
                    dbwave=dbwave, solar_irr=solar_irr,
                    new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only)
     # NOTE: Correction factors were removed after discovering that Python

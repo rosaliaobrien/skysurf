@@ -547,6 +547,8 @@ def earthsun(day, lon, lat):
     
     L2_Dis_from_earth = 0.010037*Earth_Dis
     L2_Dis_from_sun = Earth_Dis+L2_Dis_from_earth
+#    print('Earth dis:', Earth_Dis)
+#    print('L2 dis:', L2_Dis_from_sun)
 
     # Earth's true longitude (radians)
     Earth_Lon = (- (np.pi - lambda_solar)) % (2 * np.pi)
