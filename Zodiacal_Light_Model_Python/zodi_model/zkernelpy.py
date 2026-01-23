@@ -532,6 +532,10 @@ def earthsun(day, lon, lat):
     eccen = 0.01671254
 
     # Solar longitude
+    # See https://en.wikipedia.org/wiki/Position_of_the_Sun :)
+    # Mean longitude of the sun is 280.46 + 0.9856474 * day
+    # Mean anomaly (fraction of the elliptical orbit's period that has elapsed since
+#     the Earth passed periapsis) is
     lambda_solar = (-80.598349 + 0.98564736 * day +
                     1.912 * np.cos(pi2 / 365.25 * (day - 94.8))) * d2r
 
@@ -540,6 +544,9 @@ def earthsun(day, lon, lat):
 
     # Earth-Sun distance (AU)
     Earth_Dis = (1.0 - eccen**2) / (1.0 + eccen * np.cos(mean_anomaly))
+    
+    L2_Dis_from_earth = 0.010037*Earth_Dis
+    L2_Dis_from_sun = Earth_Dis+L2_Dis_from_earth
 
     # Earth's true longitude (radians)
     Earth_Lon = (- (np.pi - lambda_solar)) % (2 * np.pi)
@@ -550,7 +557,7 @@ def earthsun(day, lon, lat):
     # Earth's mean longitude (radians)
     Earth_Mean_Lon = (99.403445 + 0.98564736 * day) * d2r % pi2
 
-    return SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon
+    return SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis_from_sun
 
 '''
 def gaussint(a, b, numpts=50):
@@ -1359,7 +1366,7 @@ def zsrcfunc(det, Scatt, Therm, a, df_out=None, phase_type='kelsall'):
     return Source
 
 
-def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colcorr=False, dbwave=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
+def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=False, no_colcorr=False, dbwave=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
     want_los_info = losinfo
     # print('a:',a)
     RMAX = 5.2
@@ -1445,7 +1452,7 @@ def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colco
     for i in range(10):
         detnum += (np.array([d['wave_len'] for d in data]) == dbwave[i]) * (i + 1)
 
-    SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon = earthsun(data['day1990'], data['longitude'], data['latitude'])
+    SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis_from_sun = earthsun(data['day1990'], data['longitude'], data['latitude'])
 
     f = np.zeros(npts)
 
@@ -1473,7 +1480,10 @@ def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colco
         lat = data[ilos]['latitude'] * d2r
         lon = data[ilos]['longitude'] * d2r
 
-        Re = Earth_Dis[ilos]
+        if L2 == True:
+            Re = L2_Dis_from_sun[ilos]
+        else:
+            Re = Earth_Dis[ilos]
         Theta = Earth_Lon[ilos]
 
         COSTHETA = np.cos(Theta)
@@ -1565,7 +1575,7 @@ def zkernel(data, a, phase_type='kelsall', indxpar=None, losinfo=False, no_colco
                 'elong': SolElong[ilos] / d2r,
                 'day': data[ilos]['day1990'],
                 'earth_lon': Theta / d2r,
-                'earth_rad': Re,
+                'source_rad': Re,
                 'element': {
                     'earth_dist': los,
                     'solar_dist': R,

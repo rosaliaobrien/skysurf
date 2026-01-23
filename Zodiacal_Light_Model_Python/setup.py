@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="zodi_model",
-    version="0.2.1",
+    name="zodisurf",
+    version="2.0",
     packages=find_packages(),
     install_requires=[
         "numpy>=1.19.0",
