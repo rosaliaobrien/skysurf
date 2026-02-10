@@ -2,9 +2,9 @@ import numpy as np
 import json
 from scipy.interpolate import interp1d
 
-from zodi_model.zkernelpy import zkernel, get_parnames
-from zodi_model.skysurf_params import get_albedo, get_hong_params, get_mult, get_emiss, put_zpar
-from zodi_model.solar_sp import solar_sp
+from zodisurf.zkernelpy import zkernel, get_parnames
+from zodisurf.skysurf_params import get_albedo, get_hong_params, get_mult, get_emiss, put_zpar
+from zodisurf.solar_sp import solar_sp
 
 def read_zpars(filename=None):
     """
