@@ -134,15 +134,15 @@ def mk_zdata(lambda_, day, lon, lat):
 
     return zdata
 
-def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_irr=None, no_colcorr=False, new_iso_comp=False, iso_comp_only=False):
+def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
     """
     Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity 
     for a given set of LOS, Wavelength, and Time.
     
     Parameters:
     -----------
-    lambda_ : float
-        Wavelength in microns
+    lambda_ : array
+        Wavelengths in microns
     phase_type : str
         "kelsall" or "skysurf" - Whether to use the standard Kelsall+1998 
         phase function or the O'Brien+2025 phase function
@@ -171,16 +171,23 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_ir
         Scalar or array of zodi model intensity in MJy sr^-1
     """
     
-    # Check wavelength restriction for current implementation
-    if phase_type == 'skysurf':
-        if lambda_ > 3.5:
-            raise ValueError("This code does not work at lambda > 3.5 micron.")
-    
     # Input validation
     lambda_ = np.atleast_1d(lambda_)
     day = np.atleast_1d(day)
     lon = np.atleast_1d(lon)
     lat = np.atleast_1d(lat)
+
+    # Check if lambda_ matches the shape of day, lon, and lat
+    if not (lambda_.shape == day.shape == lon.shape == lat.shape):
+        raise ValueError(
+            f"Shape mismatch: lambda_ {lambda_.shape} must match "
+            f"day {day.shape}, lon {lon.shape}, and lat {lat.shape}."
+        )
+
+    # Check wavelength restriction for current implementation
+    if phase_type == 'skysurf':
+        if any(element > 10 for element in lambda_):
+            raise ValueError("This code does not work at lambda > 3.5 micron.")
     
     if phase_type not in ['kelsall', 'skysurf']:
         raise ValueError("phase_type must be either 'kelsall' or 'skysurf'")
@@ -190,50 +197,53 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_ir
     if np.any(lat < -90) or np.any(lat > 90):
         raise ValueError("Latitude (lat) must be in the range -90 to 90 degrees.")
 
-    # Load default parameters if not provided
+    # Load default parameters if noprovided
     if zpar is None:
         zpar = read_zpars()
     else:
         zpar = np.array(zpar, dtype=float)
 
-    # Array of DIRBE wavelengths (will be modified for skysurf)
-    dbwave = np.array([1.25, 2.2, 3.5, 4.9, 12, 25, 60, 100, 140, 240])
+    if phase_type == 'kelsall':
+        # Array of DIRBE wavelengths
+        dbwave = np.array([1.25, 2.2, 3.5, 4.9, 12, 25, 60, 100, 140, 240])
+        zpar = np.array([zpar]*len(lambda_), dtype=float)
+        # zpar = np.tile(zpar, (len(lambda_), 1))
+        # print(zpar)
     
     # Use the SKYSURF (O'Brien+2025) albedo and phase function
     if phase_type == 'skysurf':
-        # Modify dbwave to accommodate custom wavelength
-        dbwave[0] = lambda_[0]  # Use first wavelength value
         
         # Get SKYSURF parameters
-        albedo = get_albedo(lambda_[0])
-        hong_params = get_hong_params(lambda_[0])
+        albedo_arr = get_albedo(lambda_)
+        hong_params_arr = get_hong_params(lambda_)
         
-        if lambda_[0] > 1.6:
-            # Apply multiplicative factor for longer wavelengths
-            mult = get_mult(lambda_[0])
-            hong_params[-3:] = hong_params[-3:] * mult
-            
-            # Get emissivity
-            emiss = get_emiss(lambda_[0])
-            
-            # Update parameters
-            zpar = put_zpar(zpar, 0, 0, 0, albedo, det1=0, hg3=hong_params, E1=emiss)
-        else:
-            # Update parameters without emissivity
-            zpar = put_zpar(zpar, 0, 0, 0, albedo, det1=0, hg3=hong_params)
+        # if lambda_[0] > 1.6:
+        # Apply multiplicative factor for longer wavelengths
+        mult_arr = get_mult(lambda_)
+        
+        hong_params_arr[:,-3:] = hong_params_arr[:,3:] * mult_arr
+
+        # Get emissivity
+        emiss_arr = get_emiss(lambda_)
+        
+        # Update parameters
+        zpar = put_zpar(zpar, 0, 0, 0, albedo_arr, det1=0, hg3=hong_params_arr, E1=emiss_arr)
+        # else:
+        #     # Update parameters without emissivity
+        #     zpar = put_zpar(zpar, 0, 0, 0, albedo_arr, det1=0, hg3=hong_params_arr)
+
+    # print(zpar[0])
 
     # Create data structure
     data = mk_zdata(lambda_, day, lon, lat)
+
+    # print(data)
     
     # Call kernel with phase_type parameter
-    zodi = zkernel(data, zpar, phase_type=phase_type, L2 = L2, no_colcorr=True,
-                   dbwave=dbwave, solar_irr=solar_irr,
+    zodi = zkernel(data, zpar, phase_type=phase_type, L2 = L2, no_colcorr=True, solar_irr=solar_irr,
                    new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only)
-    # NOTE: Correction factors were removed after discovering that Python
-    # matches the raw IDL zkernel output exactly (0.11165 MJy/sr).
-    # The discrepancy was with IDL's get_zmod wrapper (0.11494 MJy/sr),
-    # which appears to have a calibration factor built in.
-    # See WAVELENGTH_DEPENDENCY_ISSUE.md for full investigation.
+
+    # print(zodi)
 
     rounded_zodi = np.round(zodi, 5)
 

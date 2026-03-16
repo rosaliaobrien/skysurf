@@ -54,6 +54,7 @@ def mk_zdata(lambda_val, day, lon, lat):
     nlat = 1 if isinstance(lat, (int, float)) else len(lat)
 
     npts = max(nwave, nday, nlon, nlat)
+    # print(npts)
 
     if not all(x in [1, npts] for x in [nwave, nday, nlon, nlat]):
         raise ValueError("Inputs must be scalars or arrays of equal dimension.")
@@ -367,6 +368,7 @@ def phasefunc(x, a):
 
     # Partial derivatives
     npts = len(x)
+    # print(npts)
     pder = np.zeros((npts, 3), dtype=np.float64)
 
     # ∂phi/∂C0
@@ -547,8 +549,6 @@ def earthsun(day, lon, lat):
     
     L2_Dis_from_earth = 0.010037*Earth_Dis
     L2_Dis_from_sun = Earth_Dis+L2_Dis_from_earth
-#    print('Earth dis:', Earth_Dis)
-#    print('L2 dis:', L2_Dis_from_sun)
 
     # Earth's true longitude (radians)
     Earth_Lon = (- (np.pi - lambda_solar)) % (2 * np.pi)
@@ -619,7 +619,7 @@ def simpint(b, stepsize=0.025):
 
 import numpy as np
 
-def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, solar_irr=None):
+def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, solar_irr=None):
     """
     Compute scattered light contribution of zodiacal dust.
 
@@ -627,7 +627,7 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, sol
     - phase_type: str
         'kelsall' or 'skysurf'
     - det: int
-        DIRBE detector number (0–9) or -1 if non-DIRBE
+        DIRBE detector number (0–9) or -99 if non-DIRBE
     - Lambda: float
         Wavelength in microns
     - LOS: float or np.ndarray
@@ -650,6 +650,7 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, sol
         Scattered light brightness per LOS element [npts]
     """
     if det <= 2:
+
         # Solar flux at 1 AU (W/m^2/um) - from IDL code
         SolFlux1AU = np.array([
             2.3405606e+08,  # 1.25 micron
@@ -667,13 +668,13 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, sol
         # Solar flux calculation 
         if solar_irr is not None:
             SolFlux = solar_irr / R**2
-        elif det >= 0 and phase_type == 'skysurf':
+        elif (phase_type == 'skysurf'):
             SolFlux = solar_sp(Lambda) / R**2
         elif det >= 0 and phase_type == 'kelsall':
             SolFlux = SolFlux1AU[det] / R**2
         else:
             SolFlux = 0.0
-        # print(f"SolFlux: {SolFlux}")
+
         # Phase angle calculation (match IDL logic)
         phase_ang = np.arcsin(np.clip(Re / R * np.sin(SolElong), -1.0, 1.0))
         itest = (LOS >= Re * np.cos(SolElong))
@@ -687,8 +688,7 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, sol
             # Hong functions: use all parameters
             aaa = a
         else:
-            # Fallback
-            aaa = a[0:3]
+            raise Exception('Your phase function parameters are messed up!')
 
         # Phase function - use Hong function for SKYSURF, regular phase function for Kelsall
         if phase_type == 'skysurf' and len(a) % 2 == 0:
@@ -699,32 +699,36 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, df_out=None, sol
             phase_func, _ = phasefunc(scat_ang, aaa)
 
         phase_func = np.asarray(phase_func)
-        # print(f"phase_func: {phase_func}")
-# 
+        # print(np.sum(phase_func))
+        # print(SolFlux[0])
+
         # Scattered light calculation using conditional solar flux
         Scatt = SolFlux * phase_func
-        # print(f"Scatt: {Scatt}")
         
-        if df_out is not None:
-            # Derivatives with respect to phase function parameters
-            dphase_da = np.zeros((len(phase), 9))
-            for i in range(9):
-                da = np.zeros(9)
-                da[i] = 1.0
-                dphase_da[:, i] = phasefunc(phase, da)
+        # if df_out is not None:
+        #     # Derivatives with respect to phase function parameters
+        #     dphase_da = np.zeros((len(phase), 9))
+        #     for i in range(9):
+        #         da = np.zeros(9)
+        #         da[i] = 1.0
+        #         dphase_da[:, i] = phasefunc(phase, da)
             
-            for i in range(9):
-                df_out[:, i] = SolFlux1AU[det] * dphase_da[:, i] * r_factor * re_factor
+        #     for i in range(9):
+        #         df_out[:, i] = SolFlux1AU[det] * dphase_da[:, i] * r_factor * re_factor
     else:
         Scatt = np.zeros_like(LOS)
-        if df_out is not None:
-            df_out.fill(0.0)
+        # if df_out is not None:
+        #     df_out.fill(0.0)
     
     return Scatt
 
 
-def thermfunc(det, Lambda, R, a, want_partials=False, no_colcorr=False):
+def thermfunc(phase_type, det, Lambda, R, a, no_colcorr=False):
+
     eps = 1e-20
+
+    # Temp, Temp2, idk, Temperature powerlaw
+    # To2 and Kappa are zero in the Kelsall model :)
     To1, To2, Kappa, Delta = a[:4]
 
     # Conversion factor from W/cm^2/sr to MJy/sr
@@ -736,7 +740,7 @@ def thermfunc(det, Lambda, R, a, want_partials=False, no_colcorr=False):
     Bnu1 *= cfact
     dBdT1 *= cfact
 
-    if det >= 0 and not no_colcorr:
+    if (phase_type == 'kelsall') and (det >= 0) and not no_colcorr:
         CCtherm1 = colcorr(det, Temp1, return_derivative=True)
     else:
         CCtherm1 = 1.0, 0.0
@@ -748,7 +752,7 @@ def thermfunc(det, Lambda, R, a, want_partials=False, no_colcorr=False):
         Bnu2 *= cfact
         dBdT2 *= cfact
 
-        if det >= 0 and not no_colcorr:
+        if (phase_type == 'kelsall') and (det >= 0) and not no_colcorr:
             CCtherm2, dCdT2 = colcorr(det, Temp2, return_derivative=True)
         else:
             Temp2 = 0.0
@@ -764,25 +768,25 @@ def thermfunc(det, Lambda, R, a, want_partials=False, no_colcorr=False):
         dCdT2 = 0.0
 
     # Total thermal brightness
+    # Note: Kappa is zero
     Therm = Bnu1 * CCtherm1[0] + Kappa * Bnu2 * CCtherm2[0]
-    dBdT = dBdT1 + Kappa * dBdT2
+    # dBdT = dBdT1 + Kappa * dBdT2
 
+    # df = None
+    # if want_partials:
+    #     npts = len(R)
+    #     npar = len(a)
+    #     df = np.zeros((npts, npar), dtype=np.float64)
 
-    df = None
-    if want_partials:
-        npts = len(R)
-        npar = len(a)
-        df = np.zeros((npts, npar), dtype=np.float64)
+    #     dT1 = dBdT1 * CCtherm1[0] + Bnu1 * CCtherm1[1]
+    #     dT2 = (dBdT2 * CCtherm2[0] + Bnu2 * CCtherm2[1]) * Kappa
 
-        dT1 = dBdT1 * CCtherm1[0] + Bnu1 * CCtherm1[1]
-        dT2 = (dBdT2 * CCtherm2[0] + Bnu2 * CCtherm2[1]) * Kappa
+    #     df[:, 0] = dT1 / R**Delta                      # To1
+    #     df[:, 1] = dT2 / R**Delta                      # To2
+    #     df[:, 2] = Bnu2 * CCtherm2[0]                     # Kappa
+    #     df[:, 3] = -np.log(R) * (Temp1 * dT1 + Temp2 * dT2)  # Delta
 
-        df[:, 0] = dT1 / R**Delta                      # To1
-        df[:, 1] = dT2 / R**Delta                      # To2
-        df[:, 2] = Bnu2 * CCtherm2[0]                     # Kappa
-        df[:, 3] = -np.log(R) * (Temp1 * dT1 + Temp2 * dT2)  # Delta
-
-    return Therm, df
+    return Therm
 
 
 
@@ -825,7 +829,7 @@ def zcloud(x, y, z, R, a, df_out=None, FuncIndx=0):
     # Parameters
     Alpha, Beta, Gamma = a[1:4]
     Mu = a[4]
-    # print("A:",len(a))  # This will give you the length of `a`
+
     Mu2, Mu3, Mu4, Mu5, Mu6, Mu7, Mu8, Mu9, Mu10 = a[5:14]
     Omega, Incl = a[14:16] * d2r
     Xo, Yo, Zo = a[16:19]
@@ -835,8 +839,6 @@ def zcloud(x, y, z, R, a, df_out=None, FuncIndx=0):
     sini, cosi = np.sin(Incl), np.cos(Incl)
 
     # Translate to cloud center
-    # print(x.shape, y.shape, z.shape)
-    # print('x0:', Xo)
     Xp, Yp, Zp = x - Xo, y - Yo, z - Zo
     Rc = np.sqrt(Xp**2+Yp**2+Zp**2)
 
@@ -1096,48 +1098,48 @@ def migband(x, y, z, R, a, want_partials=False):
         if valid.size > 0:
             Dens[valid] = No * (Ro / Rc[valid])**Pr * np.exp(-arg2[valid]) * ViTerm[valid]
 
-        if want_partials:
-            npts = x.size
-            npar = len(a)
-            df = np.zeros((npts, npar), dtype=np.float64)
+        # if want_partials:
+        #     npts = x.size
+        #     npar = len(a)
+        #     df = np.zeros((npts, npar), dtype=np.float64)
 
-            sZ = np.sign(Zc)
-            dlnf = (-6.0 * ZDz**5 + Pi / Vi * ZDz**(Pi - 1) / ViTerm) / Dz
+        #     sZ = np.sign(Zc)
+        #     dlnf = (-6.0 * ZDz**5 + Pi / Vi * ZDz**(Pi - 1) / ViTerm) / Dz
 
-            # df with respect to each parameter
-            df[:, 0] = Dens / No  # No
-            df[:, 1] = -Dens * ZDz * dlnf * d2r  # Dz
+        #     # df with respect to each parameter
+        #     df[:, 0] = Dens / No  # No
+        #     df[:, 1] = -Dens * ZDz * dlnf * d2r  # Dz
 
-            # Dr
-            df[:, 2] = 0.0
-            valid = np.where((arg2 <= 86) & (arg1 <= 86) & (Dens != 0.0))[0]
-            if valid.size > 0:
-                df[valid, 2] = No * (Ro / Rc[valid])**Pr * np.exp(-arg2[valid]) * ViTerm[valid] * \
-                               (-20 * RDr[valid]**20 * np.exp(-arg1[valid]))
+        #     # Dr
+        #     df[:, 2] = 0.0
+        #     valid = np.where((arg2 <= 86) & (arg1 <= 86) & (Dens != 0.0))[0]
+        #     if valid.size > 0:
+        #         df[valid, 2] = No * (Ro / Rc[valid])**Pr * np.exp(-arg2[valid]) * ViTerm[valid] * \
+        #                        (-20 * RDr[valid]**20 * np.exp(-arg1[valid]))
 
-            # Vi
-            df[:, 4] = -Dens * (ZDz**Pi) / (Vi**2 * ViTerm)
+        #     # Vi
+        #     df[:, 4] = -Dens * (ZDz**Pi) / (Vi**2 * ViTerm)
 
-            # Pi
-            df[:, 6] = Dens * (ZDz**Pi) * np.log(ZDz) / (ViTerm * Vi)
+        #     # Pi
+        #     df[:, 6] = Dens * (ZDz**Pi) * np.log(ZDz) / (ViTerm * Vi)
 
-            # Pr
-            df[:, 7] = Dens * np.log(Ro / Rc)
+        #     # Pr
+        #     df[:, 7] = Dens * np.log(Ro / Rc)
 
-            # Omega
-            df[:, 9] = Dens * dlnf * sZ / Rc * (coso * sini * Xp + sino * sini * Yp) * d2r
+        #     # Omega
+        #     df[:, 9] = Dens * dlnf * sZ / Rc * (coso * sini * Xp + sino * sini * Yp) * d2r
 
-            # Incl
-            df[:, 10] = Dens * dlnf * sZ / Rc * (sino * cosi * Xp - coso * cosi * Yp - sini * Zp) * d2r
+        #     # Incl
+        #     df[:, 10] = Dens * dlnf * sZ / Rc * (sino * cosi * Xp - coso * cosi * Yp - sini * Zp) * d2r
 
-            # Xo
-            df[:, 11] = Dens * (-dlnf * sZ / Rc * sini * sino + (dlnf * Zeta + Pr) * Xp / Rc**2)
+        #     # Xo
+        #     df[:, 11] = Dens * (-dlnf * sZ / Rc * sini * sino + (dlnf * Zeta + Pr) * Xp / Rc**2)
 
-            # Yo
-            df[:, 12] = Dens * (dlnf * sZ / Rc * coso * sini + (dlnf * Zeta + Pr) * Yp / Rc**2)
+        #     # Yo
+        #     df[:, 12] = Dens * (dlnf * sZ / Rc * coso * sini + (dlnf * Zeta + Pr) * Yp / Rc**2)
 
-            # Zo
-            df[:, 13] = Dens * (-dlnf * sZ / Rc * cosi + (dlnf * Zeta + Pr) * Zp / Rc**2)
+        #     # Zo
+        #     df[:, 13] = Dens * (-dlnf * sZ / Rc * cosi + (dlnf * Zeta + Pr) * Zp / Rc**2)
 
         return Dens, df
 
@@ -1247,37 +1249,6 @@ def solring(x, y, z, R, Theta, a, want_partials=False):
 
         # --- Total Density ---
         Dens = Dens_SR + Dens_LB + Dens_TB
-        # --- Partials ---
-        if want_partials:
-            npts = len(x)
-            df = np.zeros((npts, len(a)), dtype=np.float64)
-
-            if SR_No != 0.0:
-                df[:, 0] = Dens_SR / SR_No  # SR_No
-                df[:, 1] = Dens_SR * 2 * (R - SR_R) / SR_dR**2  # SR_R
-                df[:, 2] = Dens_SR * 2 * (R - SR_R)**2 / SR_dR**3  # SR_dR
-                df[:, 3] = Dens_SR * np.abs(SR_Z) / SR_dZ**2  # SR_dZ
-
-            if LB_No != 0.0:
-                df[:, 4] = Dens_LB / LB_No  # LB_No
-                df[:, 5] = Dens_LB * 2 * (R - LB_R) / LB_dR**2  # LB_R
-                df[:, 6] = Dens_LB * 2 * (R - LB_R)**2 / LB_dR**3  # LB_dR
-                df[:, 8] = Dens_LB * 2 * LB_Delta**2 / LB_dTheta**3 * d2r  # LB_dTheta
-                df[:, 9] = Dens_LB * np.abs(SR_Z) / LB_dZ**2  # LB_dZ
-
-            if TB_No != 0.0:
-                df[:, 10] = Dens_TB / TB_No  # TB_No
-                df[:, 11] = Dens_TB * 2 * (R - TB_R) / TB_dR**2  # TB_R
-                df[:, 12] = Dens_TB * 2 * (R - TB_R)**2 / TB_dR**3  # TB_dR
-                df[:, 14] = Dens_TB * 2 * TB_Delta**2 / TB_dTheta**3 * d2r  # TB_dTheta
-                df[:, 15] = Dens_TB * np.abs(SR_Z) / TB_dZ**2  # TB_dZ
-
-            # Common for ring + blobs
-            signZ = np.sign(SR_Z)
-            dfdz = -signZ * (Dens_SR / SR_dZ + Dens_LB / LB_dZ + Dens_TB / TB_dZ)
-
-            df[:, 16] = dfdz * (coso * sini * x + sino * sini * y) * d2r  # Omega
-            df[:, 17] = dfdz * (sino * cosi * x - coso * cosi * y - sini * z) * d2r  # Incl
 
         return Dens, df
 
@@ -1287,7 +1258,7 @@ def solring(x, y, z, R, Theta, a, want_partials=False):
 
 import numpy as np
 
-def zsrcfunc(det, Scatt, Therm, a, df_out=None, phase_type='kelsall'):
+def zsrcfunc(det, Scatt, Therm, a, phase_type='kelsall'):
     """
     Computes the zodiacal dust source function (brightness per particle).
 
@@ -1314,147 +1285,138 @@ def zsrcfunc(det, Scatt, Therm, a, df_out=None, phase_type='kelsall'):
         Derivative w.r.t. thermal emission
     """
 
-    want_partials = df_out is not None
-    a = np.asarray(a)
+    # want_partials = df_out is not None
+    a = np.asarray(a) # 3 albedos, rest are emissivities 
     npar = len(a)
 
-    # Albedo assignment (0–3 per detector, rest share a[3])
-    AlbedoDet = np.concatenate([a[0:4], np.full(6, a[3])])
+    if phase_type == 'kelsall':
+        # Albedo assignment (0–3 per detector, rest share a[3])
+        AlbedoDet = np.concatenate([a[0:4], np.full(6, a[3])])
 
-    # Emissivity assignment (detectors 0–1: emiss = 1.0, rest from a[4:11])
-    EmissDet = np.concatenate([np.ones(2), a[4:12]])
+        # Emissivity assignment (detectors 0–1: emiss = 1.0, rest from a[4:11])
+        EmissDet = np.concatenate([np.ones(2), a[4:12]])
 
-    # Default if det is invalid
-    if det >= 0:
         Albedo = AlbedoDet[det]
-        # For skysurf phase type, use emissivity from detector 2 slot (3.5 micron)
-        if phase_type == 'skysurf':
-            Emiss = EmissDet[2]  # Use slot for 3.5 micron detector
-        elif phase_type == 'kelsall':
-            Emiss = EmissDet[det]
-        else:
-            Emiss = EmissDet[det]
-    else:
-        Albedo = 0.0
-        Emiss = 1.0
+        Emiss = EmissDet[det]
+
+    if phase_type == 'skysurf':
+
+        Albedo = a[0]
+        Emiss = np.concatenate([np.ones(2), a[4:12]])[2] # Use the albedo for COBE 3rd detector (3.5 micron) for now
+
+    if phase_type == 'jwst_fitting':
+
+        Albedo = a[0]
+        Emiss = a[4]
 
 
     # Total brightness
     Source = Albedo * Scatt + Emiss * (1.0 - Albedo) * Therm
 
-    dScatt = Albedo
-    dTherm = Emiss * (1.0 - Albedo)
+    # print(Albedo)
 
-    if want_partials:
-        npts = len(np.atleast_1d(Therm))
-        if df_out.shape != (npts, npar):
-            df_out = np.zeros((npts, npar), dtype=float)
-        else:
-            df_out.fill(0.0)
-
-        # Derivative w.r.t. albedo
-        dA = Scatt - Emiss * Therm
-        if det < 3:
-            df_out[:, det] = dA
-        elif det >= 3:
-            df_out[:, 3] = dA
-
-        # Derivative w.r.t. emissivity
-        if det >= 2:
-            df_out[:, 4 + (det - 2)] = Therm / Emiss
-
-        return Source, df_out, dScatt, dTherm
+    # dScatt = Albedo
+    # dTherm = Emiss * (1.0 - Albedo)
 
     return Source
 
 
-def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=False, no_colcorr=False, dbwave=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
+def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=False, no_colcorr=True, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
+
+
     want_los_info = losinfo
-    # print('a:',a)
+
     RMAX = 5.2
     NUMBER_OF_STEPS = 50
 
     npts = len(data)
+    # print(npts)
     d2r = np.pi / 180.0
     eps = 1e-20
-    if dbwave is None:
+    if phase_type == 'kelsall':
         dbwave = [1.25, 2.2, 3.5, 4.9, 12., 25., 60., 100., 140., 240.]
     nmsg = 50000
 
-    windx = zpar_wiring()
 
+    # DELETED by Rosalia
+    # windx = zpar_wiring()
     # Apply wiring to zpars (critical for Kelsall mode)
     # This reindexes the zpars array to wire parameters together
     # For example: C_E3>C_A3 makes emissivity equal to albedo at 3.5 microns
     # Note: When no wiring is specified, this is just identity mapping
-    a = a[windx]
+    # a = a[windx]
 
 
-    FuncIndx = a[0]
+    FuncIndx = a[:,0]
 
-    nScatt = 9
-    iScatt = np.arange(1, nScatt + 1)
-    aScatt = a[iScatt]
 
     # Check if Hong parameters are stored at index 183+ (SKYSURF mode)
     # Only use Hong params if we're in skysurf mode AND they're non-zero
-    if phase_type == 'skysurf' and len(a) > 183:
-        hong_params = a[183:189]  # Get exactly 6 Hong parameters
+    if phase_type == 'skysurf':
+        hong_params = a[:,183:189]  # Get exactly 6 Hong parameters
+
         if np.any(hong_params != 0):  # Only use if non-zero
             aScatt = hong_params
+    if phase_type == 'kelsall':
+        nScatt = 9
+        iScatt = np.arange(1, nScatt + 1)
+        aScatt = a[:, iScatt]
+
+    # print(f'aScatt:{aScatt}')
 
     nTherm = 4
     iTherm = np.arange(10, 10 + nTherm)
-    aTherm = a[iTherm]
+    aTherm = a[:, iTherm]
+
+    # print(f'aTherm:{aTherm}')
 
     nDens_C = 19
     iDens_C = np.arange(14, 14 + nDens_C)
-    aDens_C = a[iDens_C]
+    aDens_C = a[:, iDens_C]
     nSrc_C = 12
     iSrc_C = np.arange(33, 33 + nSrc_C)
-    aSrc_C = a[iSrc_C]
+    aSrc_C = a[:, iSrc_C]
+
 
     nDens_B1 = 14
     iDens_B1 = np.arange(45, 45 + nDens_B1)
-    aDens_B1 = a[iDens_B1]
+    aDens_B1 = a[:, iDens_B1]
     nSrc_B1 = 12
     iSrc_B1 = np.arange(59, 59 + nSrc_B1)
-    aSrc_B1 = a[iSrc_B1]
+    aSrc_B1 = a[:, iSrc_B1]
 
     nDens_B2 = 14
     iDens_B2 = np.arange(71, 71 + nDens_B2)
-    aDens_B2 = a[iDens_B2]
+    aDens_B2 = a[:, iDens_B2]
     nSrc_B2 = 12
     iSrc_B2 = np.arange(85, 85 + nSrc_B2)
-    aSrc_B2 = a[iSrc_B2]
+    aSrc_B2 = a[:, iSrc_B2]
 
     nDens_B3 = 14
     iDens_B3 = np.arange(97, 97 + nDens_B3)
-    aDens_B3 = a[iDens_B3]
+    aDens_B3 = a[:, iDens_B3]
     nSrc_B3 = 12
     iSrc_B3 = np.arange(111, 111 + nSrc_B3)
-    aSrc_B3 = a[iSrc_B3]
+    aSrc_B3 = a[:, iSrc_B3]
 
     nDens_B4 = 14
     iDens_B4 = np.arange(123, 123 + nDens_B4)
-    aDens_B4 = a[iDens_B4]
+    aDens_B4 = a[:, iDens_B4]
     nSrc_B4 = 12
     iSrc_B4 = np.arange(137, 137 + nSrc_B4)
-    aSrc_B4 = a[iSrc_B4]
+    aSrc_B4 = a[:, iSrc_B4]
 
     nDens_RB = 21
     iDens_RB = np.arange(149, 149 + nDens_RB)
     iDens_RB = np.append(iDens_RB, 182)
-    aDens_RB = a[iDens_RB]
+    aDens_RB = a[:, iDens_RB]
     nSrc_RB = 12
     iSrc_RB = np.arange(170, 170 + nSrc_RB)
-    aSrc_RB = a[iSrc_RB]
-
-    detnum = np.zeros(npts, dtype=int) - 1
-    for i in range(10):
-        detnum += (np.array([d['wave_len'] for d in data]) == dbwave[i]) * (i + 1)
+    aSrc_RB = a[:, iSrc_RB]
 
     SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis_from_sun = earthsun(data['day1990'], data['longitude'], data['latitude'])
+
+    # print(SolElong)
 
     f = np.zeros(npts)
 
@@ -1476,9 +1438,20 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
     if want_los_info:
         losdata = []
 
-    # print('aSrc_C:', aSrc_C)
-    # print('aDens_C:', aDens_C)
+    # Detector assignment logic - only use for COBE data!
+    # Still set for HST and JWST data to help with debugging
+    if phase_type == 'skysurf':
+        Det = -99
+    if phase_type == 'jwst_fitting':
+        Det = -99
+    if phase_type == 'kelsall':
+        detnum = np.zeros(npts, dtype=int) - 1
+        for i in range(10):
+            detnum += (np.array([d['wave_len'] for d in data]) == dbwave[i]) * (i + 1)
+
+    # Loop through every position
     for ilos in range(npts):
+
         lat = data[ilos]['latitude'] * d2r
         lon = data[ilos]['longitude'] * d2r
 
@@ -1513,45 +1486,40 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
         R = np.sqrt(X**2 + Y**2 + Z**2)
 
         Lambda = data[ilos]['wave_len']
-        # Detector assignment logic - match IDL implementation exactly
-        if phase_type == 'skysurf':
-            Det = 0
-        else:
+
+        if phase_type == 'kelsall':
             Det = detnum[ilos]
 
-        if Det >= 0:
-            Scatt = scattfunc(phase_type, Det, Lambda, los, R, Re, SolElong[ilos], aScatt, solar_irr=solar_irr)
-            # print(f"Scatt: {Scatt}")
-        else:
-            Scatt = 0.0
-        Therm, _ = thermfunc(Det, Lambda, R, aTherm, no_colcorr=no_colcorr)
-        Dens_C = zcloud(X, Y, Z, R, aDens_C, FuncIndx=FuncIndx)
-        # Source function
-        Albedo = aSrc_C[0] if Det == 0 else (aSrc_C[1] if Det == 1 else (aSrc_C[2] if Det == 2 else 0.0))
-        Emiss = aSrc_C[4] if Det == 0 else (aSrc_C[5] if Det == 1 else (aSrc_C[6] if Det == 2 else 1.0))
-        Source = Albedo * Scatt + Emiss * (1.0 - Albedo) * Therm
-        Src_C= zsrcfunc(Det, Scatt, Therm, aSrc_C, phase_type=phase_type)
+
+        Scatt = scattfunc(phase_type, Det, Lambda, los, R, Re, SolElong[ilos], aScatt[ilos], solar_irr=solar_irr)
+
+        Therm = thermfunc(phase_type, Det, Lambda, R, aTherm[ilos], no_colcorr=no_colcorr)
+
+        Dens_C = zcloud(X, Y, Z, R, aDens_C[ilos], FuncIndx=FuncIndx[ilos])
+
+        Src_C = zsrcfunc(Det, Scatt, Therm, aSrc_C[ilos], phase_type=phase_type)
+        # print(Det)
 
         # Isotropic component
         if new_iso_comp:
-            Dens_new = new_isocloud(X, Y, Z, R, aDens_C)
+            Dens_new = new_isocloud(X, Y, Z, R, aDens_C[ilos])
         else:
             Dens_new = np.zeros_like(R)
 
-        Dens_B1, dDens_B1 = migband(X, Y, Z, R, aDens_B1)
-        Src_B1 = zsrcfunc(Det, Scatt, Therm, aSrc_B1, phase_type=phase_type)
+        Dens_B1, dDens_B1 = migband(X, Y, Z, R, aDens_B1[ilos])
+        Src_B1 = zsrcfunc(Det, Scatt, Therm, aSrc_B1[ilos], phase_type=phase_type)
 
-        Dens_B2, dDens_B2 = migband(X, Y, Z, R, aDens_B2)
-        Src_B2 = zsrcfunc(Det, Scatt, Therm, aSrc_B2, phase_type=phase_type)
+        Dens_B2, dDens_B2 = migband(X, Y, Z, R, aDens_B2[ilos])
+        Src_B2 = zsrcfunc(Det, Scatt, Therm, aSrc_B2[ilos], phase_type=phase_type)
 
-        Dens_B3, dDens_B3 = migband(X, Y, Z, R, aDens_B3)
-        Src_B3 = zsrcfunc(Det, Scatt, Therm, aSrc_B3, phase_type=phase_type)
+        Dens_B3, dDens_B3 = migband(X, Y, Z, R, aDens_B3[ilos])
+        Src_B3 = zsrcfunc(Det, Scatt, Therm, aSrc_B3[ilos], phase_type=phase_type)
 
-        Dens_B4, dDens_B4 = migband(X, Y, Z, R, aDens_B4)
-        Src_B4 = zsrcfunc(Det, Scatt, Therm, aSrc_B4, phase_type=phase_type)
+        Dens_B4, dDens_B4 = migband(X, Y, Z, R, aDens_B4[ilos])
+        Src_B4 = zsrcfunc(Det, Scatt, Therm, aSrc_B4[ilos], phase_type=phase_type)
 
-        Dens_RB, dDens_RB = solring(X, Y, Z, R, Earth_Mean_Lon[ilos], aDens_RB)
-        Src_RB = zsrcfunc(Det, Scatt, Therm, aSrc_RB, phase_type=phase_type)
+        Dens_RB, dDens_RB = solring(X, Y, Z, R, Earth_Mean_Lon[ilos], aDens_RB[ilos])
+        Src_RB = zsrcfunc(Det, Scatt, Therm, aSrc_RB[ilos], phase_type=phase_type)
 
         # Isotropic component only mode
         if iso_comp_only:
@@ -1563,9 +1531,12 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
             Dens_RB = np.zeros_like(R)
 
         Flux = (Src_C * Dens_C + Src_B1 * Dens_B1 + Src_B2 * Dens_B2 + Src_B3 * Dens_B3 + Src_B4 * Dens_B4 + Src_RB * Dens_RB + Src_C * Dens_new)
+        # Flux = np.sum(Src_C)
+        # print(np.sum(Src_C))
 
         # Sum the flux along the line of sight
         f[ilos] = np.sum(gqwts * Flux)
+        # print(f[ilos])
 
         if want_los_info:
             Dens = Dens_C + Dens_B1 + Dens_B2 + Dens_B3 + Dens_RB + Dens_new
@@ -1589,101 +1560,8 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
                 'zodi': f[ilos]
             })
 
-        if want_partials:
-            for ii in range(nScatt):
-                ipar = parnum[windx[iScatt[ii]]]
-                if ipar >= 0:
-                    dSrcS = dScatt[:, ii] * (
-                        dSrc_dScatt_C * Dens_C +
-                        dSrc_dScatt_B1 * Dens_B1 +
-                        dSrc_dScatt_B2 * Dens_B2 +
-                        dSrc_dScatt_B3 * Dens_B3 +
-                        dSrc_dScatt_B4 * Dens_B4 +
-                        dSrc_dScatt_RB * Dens_RB
-                    )
-                    df[ilos, ipar] += np.sum(gqwts * dSrcS)
-
-            for ii in range(nTherm):
-                ipar = parnum[windx[iTherm[ii]]]
-                if ipar >= 0:
-                    dSrcT = dTherm[:, ii] * (
-                        dSrc_dTherm_C * Dens_C +
-                        dSrc_dTherm_B1 * Dens_B1 +
-                        dSrc_dTherm_B2 * Dens_B2 +
-                        dSrc_dTherm_B3 * Dens_B3 +
-                        dSrc_dTherm_B4 * Dens_B4 +
-                        dSrc_dTherm_RB * Dens_RB
-                    )
-                    df[ilos, ipar] += np.sum(gqwts * dSrcT)
-
-            if aDens_C[0] != 0.0:
-                for ii in range(nDens_C):
-                    ipar = parnum[windx[iDens_C[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * Src_C * dDens_C[:, ii])
-                for ii in range(nSrc_C):
-                    ipar = parnum[windx[iSrc_C[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * dSrc_C[:, ii] * Dens_C)
-
-            if aDens_B1[0] != 0.0:
-                for ii in range(nDens_B1):
-                    ipar = parnum[windx[iDens_B1[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * Src_B1 * dDens_B1[:, ii])
-                for ii in range(nSrc_B1):
-                    ipar = parnum[windx[iSrc_B1[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * dSrc_B1[:, ii] * Dens_B1)
-
-            if aDens_B2[0] != 0.0:
-                for ii in range(nDens_B2):
-                    ipar = parnum[windx[iDens_B2[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * Src_B2 * dDens_B2[:, ii])
-                for ii in range(nSrc_B2):
-                    ipar = parnum[windx[iSrc_B2[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * dSrc_B2[:, ii] * Dens_B2)
-
-            if aDens_B3[0] != 0.0:
-                for ii in range(nDens_B3):
-                    ipar = parnum[windx[iDens_B3[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * Src_B3 * dDens_B3[:, ii])
-                for ii in range(nSrc_B3):
-                    ipar = parnum[windx[iDens_B3[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * dSrc_B3[:, ii] * Dens_B3)
-
-            if aDens_B4[0] != 0.0:
-                for ii in range(nDens_B4):
-                    ipar = parnum[windx[iDens_B4[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * Src_B4 * dDens_B4[:, ii])
-                for ii in range(nSrc_B4):
-                    ipar = parnum[windx[iSrc_B4[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * dSrc_B4[:, ii] * Dens_B4)
-
-            if aDens_RB[0] != 0.0:
-                for ii in range(nDens_RB):
-                    ipar = parnum[windx[iDens_RB[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * Src_RB * dDens_RB[:, ii])
-                for ii in range(nSrc_RB):
-                    ipar = parnum[windx[iSrc_RB[ii]]]
-                    if ipar >= 0:
-                        df[ilos, ipar] += np.sum(gqwts * dSrc_RB[:, ii] * Dens_RB)
-
-        # if (ilos + 1) % nmsg == 0:
-        #     print(f'LOS # {ilos}')
-
     if want_los_info:
         return losdata
-
-    if want_partials:
-        return f, df
 
     return f
 
