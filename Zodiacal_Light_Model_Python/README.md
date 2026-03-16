@@ -1,10 +1,10 @@
 # ZodiSURF: SKYSURF Zodiacal Light Modeling Package
 
-Python implementation of the Kelsall et al. (1998) zodiacal light model with SKYSURF enhancements (O'Brien et al. 2025).
+Python implementation of the Kelsall et al. (1998) zodiacal light model with SKYSURF enhancements ([O'Brien et al. 2026](https://scixplorer.org/abs/2026ApJ..1000....6O/abstract)).
 
 ## Features
 
-- Ability to run the Kelsall et al. (1998) version and the SKYSURF version (O'Brien+2025).
+- Ability to run the Kelsall et al. (1998) version and the SKYSURF version (O'Brien+2026).
 - **Wavelength Range**: 1.25-240 μm for the Kelsall model; 0.2-1.7 μm for the SKYSURF model.
 - **High Accuracy**: 0.0002% difference from IDL package.
 - **Vectorized Processing**: Scalar and array inputs
@@ -37,7 +37,7 @@ results = get_zmod(1.25, 'kelsall', days, 90.0, 0.0)
 ### get_zmod(lambda_, phase_type, day, lon, lat, **kwargs)
 
 **Parameters:**
-- `lambda_` (float): Wavelength (0.2-240 μm)
+- `lambda_` (float/array): Wavelength (0.2-240 μm)
 - `phase_type` (str): 'kelsall' or 'skysurf'
 - `day` (float/array): Day since 1990.0
 - `lon` (float/array): Ecliptic longitude (degrees)
@@ -74,22 +74,23 @@ Test: λ=1.25 μm, day=1.0, lon=0°, lat=90° → 0.114937 MJy/sr
 
 ```bibtex
 
-@ARTICLE{OBrien_2025,
+@ARTICLE{OBrien_2026,
        author = {{O'Brien}, Rosalia and {Arendt}, Richard G. and {Windhorst}, Rogier A. and {Acharya}, Tejovrash and {Calamida}, Annalisa and {Carleton}, Timothy and {Carter}, Delondrae and {Cohen}, Seth H. and {Dwek}, Eli and {Frye}, Brenda L. and et al.},
         title = "{SKYSURF-11: A New Zodiacal Light Model Optimized for Optical Wavelengths}",
-      journal = {arXiv e-prints},
-     keywords = {Cosmology and Nongalactic Astrophysics, Earth and Planetary Astrophysics, Astrophysics of Galaxies},
-         year = 2025,
-        month = oct,
-          eid = {arXiv:2510.18231},
-        pages = {arXiv:2510.18231},
-          doi = {10.48550/arXiv.2510.18231},
-archivePrefix = {arXiv},
-       eprint = {2510.18231},
- primaryClass = {astro-ph.CO},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv251018231O},
+      journal = {\apj},
+     keywords = {Observational cosmology, Diffuse radiation, Optical astronomy, Solar system, Zodiacal cloud, Cosmic background radiation, Hubble Space Telescope, 1146, 383, 1776, 1528, 1845, 317, 761},
+         year = 2026,
+        month = mar,
+       volume = {1000},
+       number = {1},
+          eid = {6},
+        pages = {6},
+          doi = {10.3847/1538-4357/ae4512},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026ApJ..1000....6O},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
+
+
 ```
 
 ## License
