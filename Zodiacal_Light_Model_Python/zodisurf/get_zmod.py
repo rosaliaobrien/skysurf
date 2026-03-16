@@ -176,6 +176,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_ir
     day = np.atleast_1d(day)
     lon = np.atleast_1d(lon)
     lat = np.atleast_1d(lat)
+    if solar_irr is not None:
+        solar_irr = np.atleast_1d(solar_irr)
 
     # Check if lambda_ matches the shape of day, lon, and lat
     if not (lambda_.shape == day.shape == lon.shape == lat.shape):
