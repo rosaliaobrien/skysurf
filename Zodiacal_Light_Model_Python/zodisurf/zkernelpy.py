@@ -54,7 +54,6 @@ def mk_zdata(lambda_val, day, lon, lat):
     nlat = 1 if isinstance(lat, (int, float)) else len(lat)
 
     npts = max(nwave, nday, nlon, nlat)
-    # print(npts)
 
     if not all(x in [1, npts] for x in [nwave, nday, nlon, nlat]):
         raise ValueError("Inputs must be scalars or arrays of equal dimension.")
@@ -368,7 +367,7 @@ def phasefunc(x, a):
 
     # Partial derivatives
     npts = len(x)
-    # print(npts)
+
     pder = np.zeros((npts, 3), dtype=np.float64)
 
     # ∂phi/∂C0
@@ -675,6 +674,10 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, solar_irr=None):
         else:
             SolFlux = 0.0
 
+        # print(np.shape(R), np.shape(SolFlux), np.shape(Lambda))
+        # print(R[:5])
+        # print(SolFlux[:5])
+
         # Phase angle calculation (match IDL logic)
         phase_ang = np.arcsin(np.clip(Re / R * np.sin(SolElong), -1.0, 1.0))
         itest = (LOS >= Re * np.cos(SolElong))
@@ -699,26 +702,12 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, solar_irr=None):
             phase_func, _ = phasefunc(scat_ang, aaa)
 
         phase_func = np.asarray(phase_func)
-        # print(np.sum(phase_func))
-        # print(SolFlux[0])
 
         # Scattered light calculation using conditional solar flux
         Scatt = SolFlux * phase_func
         
-        # if df_out is not None:
-        #     # Derivatives with respect to phase function parameters
-        #     dphase_da = np.zeros((len(phase), 9))
-        #     for i in range(9):
-        #         da = np.zeros(9)
-        #         da[i] = 1.0
-        #         dphase_da[:, i] = phasefunc(phase, da)
-            
-        #     for i in range(9):
-        #         df_out[:, i] = SolFlux1AU[det] * dphase_da[:, i] * r_factor * re_factor
     else:
         Scatt = np.zeros_like(LOS)
-        # if df_out is not None:
-        #     df_out.fill(0.0)
     
     return Scatt
 
@@ -1313,11 +1302,6 @@ def zsrcfunc(det, Scatt, Therm, a, phase_type='kelsall'):
     # Total brightness
     Source = Albedo * Scatt + Emiss * (1.0 - Albedo) * Therm
 
-    # print(Albedo)
-
-    # dScatt = Albedo
-    # dTherm = Emiss * (1.0 - Albedo)
-
     return Source
 
 
@@ -1330,7 +1314,7 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
     NUMBER_OF_STEPS = 50
 
     npts = len(data)
-    # print(npts)
+
     d2r = np.pi / 180.0
     eps = 1e-20
     if phase_type == 'kelsall':
@@ -1362,13 +1346,9 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
         iScatt = np.arange(1, nScatt + 1)
         aScatt = a[:, iScatt]
 
-    # print(f'aScatt:{aScatt}')
-
     nTherm = 4
     iTherm = np.arange(10, 10 + nTherm)
     aTherm = a[:, iTherm]
-
-    # print(f'aTherm:{aTherm}')
 
     nDens_C = 19
     iDens_C = np.arange(14, 14 + nDens_C)
@@ -1415,8 +1395,6 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
     aSrc_RB = a[:, iSrc_RB]
 
     SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis_from_sun = earthsun(data['day1990'], data['longitude'], data['latitude'])
-
-    # print(SolElong)
 
     f = np.zeros(npts)
 
@@ -1490,15 +1468,18 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
         if phase_type == 'kelsall':
             Det = detnum[ilos]
 
+        if solar_irr is not None:
+            solar_irr_ilos = solar_irr[ilos]
+        else:
+            solar_irr_ilos = None
 
-        Scatt = scattfunc(phase_type, Det, Lambda, los, R, Re, SolElong[ilos], aScatt[ilos], solar_irr=solar_irr)
+        Scatt = scattfunc(phase_type, Det, Lambda, los, R, Re, SolElong[ilos], aScatt[ilos], solar_irr=solar_irr_ilos)
 
         Therm = thermfunc(phase_type, Det, Lambda, R, aTherm[ilos], no_colcorr=no_colcorr)
 
         Dens_C = zcloud(X, Y, Z, R, aDens_C[ilos], FuncIndx=FuncIndx[ilos])
 
         Src_C = zsrcfunc(Det, Scatt, Therm, aSrc_C[ilos], phase_type=phase_type)
-        # print(Det)
 
         # Isotropic component
         if new_iso_comp:
@@ -1531,12 +1512,9 @@ def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=Fal
             Dens_RB = np.zeros_like(R)
 
         Flux = (Src_C * Dens_C + Src_B1 * Dens_B1 + Src_B2 * Dens_B2 + Src_B3 * Dens_B3 + Src_B4 * Dens_B4 + Src_RB * Dens_RB + Src_C * Dens_new)
-        # Flux = np.sum(Src_C)
-        # print(np.sum(Src_C))
 
         # Sum the flux along the line of sight
         f[ilos] = np.sum(gqwts * Flux)
-        # print(f[ilos])
 
         if want_los_info:
             Dens = Dens_C + Dens_B1 + Dens_B2 + Dens_B3 + Dens_RB + Dens_new
