@@ -141,8 +141,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_ir
     
     Parameters:
     -----------
-    lambda_ : array
-        Wavelengths in microns
+    lambda_ : float or array
+        Wavelength in microns
     phase_type : str
         "kelsall" or "skysurf" - Whether to use the standard Kelsall+1998 
         phase function or the O'Brien+2025 phase function
@@ -176,6 +176,11 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_ir
     day = np.atleast_1d(day)
     lon = np.atleast_1d(lon)
     lat = np.atleast_1d(lat)
+
+    # If lambda_ is a single value, broadcast it to the shape of the coordinates
+    if lambda_.size == 1 and lambda_.shape != day.shape:
+        lambda_ = np.full_like(day, lambda_[0], dtype=float)
+
     if solar_irr is not None:
         solar_irr = np.atleast_1d(solar_irr)
 
@@ -230,22 +235,13 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_ir
         
         # Update parameters
         zpar = put_zpar(zpar, 0, 0, 0, albedo_arr, det1=0, hg3=hong_params_arr, E1=emiss_arr)
-        # else:
-        #     # Update parameters without emissivity
-        #     zpar = put_zpar(zpar, 0, 0, 0, albedo_arr, det1=0, hg3=hong_params_arr)
-
-    # print(zpar[0])
 
     # Create data structure
     data = mk_zdata(lambda_, day, lon, lat)
-
-    # print(data)
     
     # Call kernel with phase_type parameter
     zodi = zkernel(data, zpar, phase_type=phase_type, L2 = L2, no_colcorr=True, solar_irr=solar_irr,
                    new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only)
-
-    # print(zodi)
 
     rounded_zodi = np.round(zodi, 5)
 
