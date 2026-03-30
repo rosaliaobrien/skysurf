@@ -697,7 +697,7 @@ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, solar_irr=None):
         if phase_type == 'skysurf' and len(a) % 2 == 0:
             # SKYSURF uses Hong phase function
             phase_func = hong_phase_func(scat_ang, aaa)
-        else:
+        if phase_type == 'kelsall':
             # Use regular Kelsall phase function
             phase_func, _ = phasefunc(scat_ang, aaa)
 
@@ -1135,9 +1135,6 @@ def migband(x, y, z, R, a, want_partials=False):
     else:
         return np.zeros_like(x), None
 
-
-import numpy as np
-
 def solring(x, y, z, R, Theta, a, want_partials=False):
     """
     Computes number density of Earth's resonant dust ring.
@@ -1244,8 +1241,6 @@ def solring(x, y, z, R, Theta, a, want_partials=False):
     else:
         return np.zeros_like(R), None
 
-
-import numpy as np
 
 def zsrcfunc(det, Scatt, Therm, a, phase_type='kelsall'):
     """
