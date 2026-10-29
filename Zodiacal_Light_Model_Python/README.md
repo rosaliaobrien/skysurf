@@ -7,14 +7,14 @@ Python implementation of the Kelsall et al. (1998) zodiacal light model with SKY
 - Ability to run the Kelsall et al. (1998) version and the SKYSURF version (O'Brien+2026).
 - **Wavelength Range**: 1.25-240 μm for the Kelsall model; 0.2-1.7 μm for the SKYSURF model.
 - **High Accuracy**: 0.0002% difference from IDL package.
-- **Vectorized Processing**: Scalar and array inputs
+- **Fast Vectorization**: Evaluates millions of lines of sight in seconds via batched, multithreaded array processing.
 
 **Requirements:** Python ≥3.7, NumPy ≥1.19, SciPy ≥1.7
 
 ## Usage
 
 ```python
-from zodi_model.get_zmod import get_zmod
+from zodisurf import get_zmod
 import numpy as np
 
 # Single observation
@@ -23,13 +23,14 @@ result = get_zmod(
     phase_type='kelsall',   # 'kelsall' or 'skysurf'
     day=100.0,              # day since 1990.0
     lon=90.0,               # ecliptic longitude (deg)
-    lat=0.0                 # ecliptic latitude (deg)
+    lat=0.0,                # ecliptic latitude (deg)
+    L2=False                # set to True for Earth-Sun L2 (e.g., JWST)
 )
-print(f"Intensity: {result[0]:.6f} MJy/sr")
+print(f"Intensity: {result:.6f} MJy/sr")
 
-# Array processing
+# Extremely fast array processing (e.g., generating maps)
 days = np.linspace(1, 365, 12)
-results = get_zmod(1.25, 'kelsall', days, 90.0, 0.0)
+results = get_zmod(1.25, 'kelsall', days, 90.0, 0.0, n_jobs=-1)
 ```
 
 ## API
@@ -42,6 +43,8 @@ results = get_zmod(1.25, 'kelsall', days, 90.0, 0.0)
 - `day` (float/array): Day since 1990.0
 - `lon` (float/array): Ecliptic longitude (degrees)
 - `lat` (float/array): Ecliptic latitude (degrees)
+- `L2` (bool, optional): If True, puts observer at Earth-Sun L2 (default: False)
+- `n_jobs` (int, optional): CPU threads to use for large arrays. Default uses all cores. *(Note: Set to `1` if running inside MCMC or MPI pools to prevent thread-fighting).*
 - `zpar` (array, optional): Custom parameters (256 elements)
 - `solar_irr` (float, optional): Solar irradiance (in MJy/sr) corresponding to bandpass
 - `new_iso_comp` (bool, optional): If True, include isotropic component (default: False)
@@ -73,7 +76,6 @@ Test: λ=1.25 μm, day=1.0, lon=0°, lat=90° → 0.114937 MJy/sr
 ## Citation
 
 ```bibtex
-
 @ARTICLE{OBrien_2026,
        author = {{O'Brien}, Rosalia and {Arendt}, Richard G. and {Windhorst}, Rogier A. and {Acharya}, Tejovrash and {Calamida}, Annalisa and {Carleton}, Timothy and {Carter}, Delondrae and {Cohen}, Seth H. and {Dwek}, Eli and {Frye}, Brenda L. and et al.},
         title = "{SKYSURF-11: A New Zodiacal Light Model Optimized for Optical Wavelengths}",
@@ -89,8 +91,6 @@ Test: λ=1.25 μm, day=1.0, lon=0°, lat=90° → 0.114937 MJy/sr
        adsurl = {https://ui.adsabs.harvard.edu/abs/2026ApJ..1000....6O},
       adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
-
-
 ```
 
 ## License

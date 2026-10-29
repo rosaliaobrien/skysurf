@@ -79,6 +79,11 @@ def get_mult(wavelength):
     """
     Get multiplicative factor for wavelengths. Vectorized version.
     From O'Brien+2025 - exact implementation from IDL code.
+    These "multiplicative" factors should scale the skysurf version
+    to match the Kelsall version at wavelengths between 1.6 and 4.9 micron.
+    This is becayse O'Brien+2025 did not calibrate to these wavelengths!!
+    Either way, the "skysurf" method is only really reliable < 1.7 micron,
+    but still pretty close up to 3.5 micron.
     
     Parameters:
     -----------
@@ -106,7 +111,7 @@ def get_mult(wavelength):
 
 def get_emiss(wavelength):
     """
-    Get emissivity value for wavelengths > 1.6 microns.
+    Guess the emissivity value for wavelengths > 1.6 microns.
     From O'Brien+2025 - exact implementation from IDL code.
     When extrapolating out to 3.5 micron, need to adjust the emissivity too.
 
