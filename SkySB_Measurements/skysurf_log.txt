@@ -1,0 +1,11 @@
+Log 
+Running: mastDownload/HST/jdkq01cyq/jdkq01cyq_flc.fits SCI1
+Running: mastDownload/HST/jdkq01d9q/jdkq01d9q_flc.fits SCI1
+Running: mastDownload/HST/jdkq01cwq/jdkq01cwq_flc.fits SCI1
+Running: mastDownload/HST/jdkq01d7q/jdkq01d7q_flc.fits SCI1
+Running: mastDownload/HST/jdkq01diq/jdkq01diq_flc.fits SCI1
+Running: mastDownload/HST/jdkq01cwq/jdkq01cwq_flc.fits SCI2
+Running: mastDownload/HST/jdkq01d7q/jdkq01d7q_flc.fits SCI2
+Running: mastDownload/HST/jdkq01diq/jdkq01diq_flc.fits SCI2
+Running: mastDownload/HST/jdkq01cyq/jdkq01cyq_flc.fits SCI2
+Running: mastDownload/HST/jdkq01d9q/jdkq01d9q_flc.fits SCI2

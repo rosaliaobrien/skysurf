@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
+import os
 import numpy as np
 import pandas as pd
 
@@ -89,15 +90,18 @@ class MagnitudeCalculatorTab(QWidget):
             exposure_time = float(self.exposure_time.text())
             size = float(self.object_size.text())
 
-            # Example CSV read
-            df = pd.read_csv(f"data/{camera}table.csv")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            csv_path = os.path.join(script_dir, "data", camera.upper() + "table.csv")
+            df = pd.read_csv(csv_path)
             exposure_constant  = df['1" a coeff'][df.iloc[:, 0] == filter_name].values[0]
             background_constant= df['1" b coeff'][df.iloc[:, 0] == filter_name].values[0]
             avg                = df['Avg Exp'][df.iloc[:, 0] == filter_name].values[0]
             back                = df['Avg Back'][df.iloc[:, 0] == filter_name].values[0]
 
             # Elephant data (simplified)
-            elephant_df = pd.read_csv(f"data/{camera}_elephant_data.csv")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            elephant_csv_path = os.path.join(script_dir, "data", camera.upper() + "_elephant_data.csv")
+            elephant_df = pd.read_csv(elephant_csv_path)
             a_elephant  = elephant_df['50% a'][elephant_df.iloc[:, 0] == filter_name]
             b_elephant  = elephant_df['50% b'][elephant_df.iloc[:, 0] == filter_name]
             x0_elephant = elephant_df['50% x0'][elephant_df.iloc[:, 0] == filter_name]
@@ -219,7 +223,9 @@ class ProbabilityCalculatorTab(QWidget):
             mag_input = float(self.magnitude_input.text())
 
             #--- Read the "elephant data" CSV for the logistic size-based parameters
-            elephant_df = pd.read_csv(f"data/{camera}_elephant_data.csv")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            elephant_csv_path = os.path.join(script_dir, "data", camera.upper() + "_elephant_data.csv")
+            elephant_df = pd.read_csv(elephant_csv_path)
             wfc_prefix = "" if camera == "ACS" else "WFC3 "
             filter_name = f"{wfc_prefix}{camera} {filter_number}"
             row = elephant_df[elephant_df.iloc[:, 0] == filter_name]
@@ -252,7 +258,9 @@ class ProbabilityCalculatorTab(QWidget):
             #                     + logistic_magnitude_for_50pct_size
             #   (where logistic_magnitude_for_50pct_size uses the same
             #    a_50, b_50, x0_50, c_50 from elephant data).
-            df_cam = pd.read_csv(f"data/{camera}table.csv")  # same CSV used in the 1st tab
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            csv_path = os.path.join(script_dir, "data", camera.upper() + "table.csv")
+            df_cam = pd.read_csv(csv_path)  # same CSV used in the 1st tab
             exposure_constant  = df_cam['1" a coeff'][df_cam.iloc[:, 0] == filter_name].values[0]
             background_constant= df_cam['1" b coeff'][df_cam.iloc[:, 0] == filter_name].values[0]
             avg_exp            = df_cam['Avg Exp'][df_cam.iloc[:, 0] == filter_name].values[0]

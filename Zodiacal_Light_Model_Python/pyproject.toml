@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zodi_model"
+version = "0.2.1"
+authors = [
+  { name="Rosalia O'Brien", email="your.email@domain.com" },
+  { name="Tejovrash Acharya", email="your.email@domain.com" },
+]
+description = "Python implementation of Kelsall+1998 zodiacal light model with SKYSURF enhancements"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Development Status :: 4 - Beta",
+]
+dependencies = [
+    "numpy>=1.19.0",
+    "scipy>=1.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0.0",
+    "pytest-cov>=2.0.0",
+    "black>=21.0.0",
+    "flake8>=3.9.0",
+]
+viz = [
+    "matplotlib>=3.0.0",
+]

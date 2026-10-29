@@ -60,19 +60,69 @@ end
 ; See O'Brien+2025
 function get_albedo,lam
 
-  ; Define wavelength and corresponding albedo arrays
-  lam_list    = [2.2, 3.5]
-  albedo_list = [0.255, 0.21]
+  albedo_1p6 = 0.11298*1.6+0.08231
 
-  if lam gt 1.8 then begin
-    ; Find the index of the closest wavelength in lam_list
-    idx = (min(abs(lam_list - lam), minval))
-    albedo = albedo_list[idx]
-  endif else begin
-    albedo = 0.113*lam+0.082
+  ; Define wavelength and corresponding albedo arrays
+  lam_list    = [1.6, 2.2, 3.5, 4.9]
+  albedo_list = [albedo_1p6, 0.255, 0.210, 0]
+
+  if lam gt 1.6 then begin
+    
+    albedo = interpol(albedo_list,lam_list,lam)
+    
+  endif else begin 
+    
+    albedo = 0.11298*lam+0.08231
+    
   endelse
 
   return, albedo
+end
+
+; Function to get multiplier as a function of wavelength (lam)
+; Should be = 1 for nominal HST wavelengths. When trying to extrapolate out to 3.5 micron,
+; a multiplier is added to match Kelsall better.
+; I can't adjust the albedo directly, because the albedo is tied to the emissivity.
+; See O'Brien+2025
+function get_mult,lam
+
+  ; Define wavelength and corresponding multiplier arrays
+  lam_list    = [1.6, 2.2, 3.5, 4.9]
+  mult_list   = [1.0, 1.227, 1.259, 1.0]
+
+  if lam gt 1.6 then begin
+
+    mult = interpol(mult_list,lam_list,lam)
+
+  endif else begin
+
+    mult = 1.0
+
+  endelse
+
+  return, mult
+end
+
+; When trying to extrapolate out to 3.5 micron,
+; you need to adjust the emissivity too.
+; See O'Brien+2025
+function get_emiss,lam
+
+  ; Define wavelength and corresponding multiplier arrays
+  lam_list    = [1.6, 2.2, 3.5, 4.9]
+  emm_list   = [0, 0, 1.66, 0.997]
+
+  if lam gt 1.6 then begin
+
+    emm = interpol(emm_list,lam_list,lam)
+
+  endif else begin
+
+    emm = 1.0
+
+  endelse
+
+  return, emm
 end
 
 
@@ -82,14 +132,14 @@ function get_hong_params,lam
 
   ; If lambda is less than 0.25 or greater than 1.8, then utilize phase function parameters for 0.25/ 1.8
   ; These phase functions have not been tested outside of this wavelength range
-  lam_use = (lam gt 1.8) ? 1.8 : ((lam lt 0.25) ? 0.25 : lam)
+  lam_use = (lam gt 1.6) ? 1.6 : ((lam lt 0.25) ? 0.25 : lam)
   
-  g1 = 0.2496*lam_use+0.1157
-  g2 = 0.0543*lam_use-0.3086
-  g3 = -0.8704
-  w1 = 0.0018*lam_use+0.0478
-  w2 = -0.0014*lam_use+0.031
-  w3 = 0.0003
+  g1 = 0.24958*lam_use+0.11571
+  g2 = 0.05428*lam_use-0.30864
+  g3 = -0.87036
+  w1 = 0.00183*lam_use+0.04775
+  w2 = -0.00143*lam_use+0.03122
+  w3 = 0.00030
   
   hg_arr = [g1, g2, g3, w1, w2, w3]
   

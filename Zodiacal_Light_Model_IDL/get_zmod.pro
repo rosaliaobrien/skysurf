@@ -41,12 +41,21 @@
 ;
 ;     zpar=zpar - array of zodi model params.  If not specified, the
 ;                 default will be restored from zpars.xdr
-;     no_colcorr=no_colcorr - if set, the result will be actual
-;                  intensity at the specified wavelength(s) instead of
-;                  quoted intensity for a spectrum nu*F_nu = constant
+;     solar_irr - [float] solar irradiance (in MJy/sr) corresponding to a 
+;                 bandpass
+;     new_iso_comp - If this keyword is set, the final intensity will include
+;                    an isotropic-like component (see O'Brien et al. 2025).
+;     iso_comp_only - If this keyword is set, the final intensity will represent
+;                     only the isotropic-like component.
 ;              
 ;---------------------------------------------------------------------
-function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,no_colcorr=no_colcorr,solar_irr=solar_irr
+function get_zmod,lambda,phase_type,day,lon,lat,zpar=zpar,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
+
+if phase_type eq 'skysurf' then begin
+if lambda GT 3.5 then begin
+    message, '!!! This code does not work at lambda > 3.5 micron.'
+endif
+endif
 
 if (n_elements(zpar) eq 0) then begin
     aend    = 0
@@ -62,23 +71,45 @@ endif
 
 ; Array of DIRBE wavelengths
 dbwave = [1.25,2.2,3.5,4.9,12,25,60,100,140,240]
-dbwave[0] = lambda ; Modify dbwave this way to avoid breaking the code elsewhere
 
 ; Use the SKYSURF (O'Brien+2025) albedo and phase function
 if phase_type eq 'skysurf' then begin
+  
+  
+  dbwave[0] = lambda ; Modify dbwave this way to avoid breaking the code elsewhere
+  
   albedo = get_albedo(lambda)
   hong_params = get_hong_params(lambda)
-;  print,lambda,albedo,hong_params
-  zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params)
+  
+  if lambda gt 1.6 then begin
+    
+    mult = get_mult(lambda)
+    hong_params[-3:*] = hong_params[-3:*]*mult
+    
+    emm = get_emiss(lambda)
+    
+    zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params,update_emiss=1,E1=emm)
+  
+  endif else begin
+  
+    zpar = put_zpar(zpar,0,0,0,albedo,det1=0,hg3=hong_params)
+  
+  endelse
+  
 endif
 
 data = mk_zdata(lambda,day,lon,lat)
 
-zkernel,data,zpar,z,no_colcorr=no_colcorr,dbwave=dbwave,losinfo=0,solar_irr=solar_irr
+;     no_colcorr=no_colcorr - if set, the result will be actual
+;                  intensity at the specified wavelength(s) instead of
+;                  quoted intensity for a spectrum nu*F_nu = constant
+zkernel,data,zpar,phase_type,z,no_colcorr=1,dbwave=dbwave,losinfo=0,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
 
-; Only return up to 6 decimal places
-rounded_z_str = STRING(z, FORMAT='(F0.7)')
+; Only return up to 5 decimal places
+rounded_z_str = STRING(z, FORMAT='(F0.5)')
 rounded_z_float = FLOAT(rounded_z_str)
+
+;print,rounded_z_float
 
 return,rounded_z_float
 end

@@ -219,16 +219,9 @@ if (n_elements(init) eq 0) then begin
     ;
     ; Read Exp. Supp. Table for BB at P=0
     ;
-; Hardcode the file location
-;    findpro,'zkernel',/noprint,dirlist=dirlist
-;    if (dirlist(0) ne '') then begin
-;        case (!version.os) of
-;          'vms' : infile = dirlist(0) + 'colcorr.tab'
-;          else  : infile = dirlist(0) + '/' + 'colcorr.tab'
-;        endcase
-;    endif else infile = 'bafsci2:[dbswg.zl.zmodel.alpha]colcorr.tab'
-    infile = 'colcorr.tab'
-    print,'Reading color correction file: ',infile
+
+;    infile = 'colcorr.tab'
+;    print,'Reading color correction file: ',infile
 
     fmt    = '(f,f,f,f,f,f,f,f,f,f,f)'
     readcol,infile,form=fmt,intemp,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10
@@ -423,7 +416,9 @@ function thermfunc,det,Lambda,R,a,df,no_colcorr=no_colcorr
     To1      = a(0)
     To2      = a(1)
     Kappa    = a(2)
-    Delta    = a(3)
+    Delta    = a(3) ; Temperature power law component 
+    ; Remember: The temperature falls off as R^Delta, so the temperature for each iteration
+    ; along the line of site is different!
 
     ;
     ; Conversion from W/cm^2/Sr (Nu Bnu) to MJy/Sr (Bnu)
@@ -438,6 +433,7 @@ function thermfunc,det,Lambda,R,a,df,no_colcorr=no_colcorr
     Bnu1     = zPlanck(Temp1,Lambda,dBdT1) * cfact
     dBdT1    = dBdT1 * cfact
     if (det ge 0 and not keyword_set(no_colcorr)) then begin
+        print,'Doing color correction!'
         CCtherm1 = colcorr(det,temp1,dCdT1)
     endif else begin
         CCtherm1 = 1.0        
@@ -591,7 +587,7 @@ end
 ;               parameter
 ;
 ;--------------------------------------------------------------
-function scattfunc,det,Lambda,LOS,R,Re,SolElong,a,df,solar_irr=solar_irr
+function scattfunc,phase_type,det,Lambda,LOS,R,Re,SolElong,a,solar_irr=solar_irr
 
     if (n_params(0) gt 7) then want_partials=1 else want_partials=0
  
@@ -612,14 +608,15 @@ function scattfunc,det,Lambda,LOS,R,Re,SolElong,a,df,solar_irr=solar_irr
                    42346.605,     $
                    14409.608 ]
     if (n_elements(solar_irr) gt 0) then begin
-        SolFlux = solar_irr
-    endif else if (det ge 0) then begin
-        SolFLux = solar_sp(Lambda) / R^2
+        SolFlux = solar_irr / R^2
+    endif else if ((det ge 0) and (phase_type eq 'skysurf')) then begin
+        SolFlux = solar_sp(Lambda) / R^2
+    endif else if ((det ge 0) and (phase_type eq 'kelsall')) then begin
+        SolFlux = SolFlux1AU(det) / R^2
+;        SolFlux = solar_sp(Lambda) / R^2
     endif else begin
         SolFlux = 0.0
     endelse
-    
-;    print,'SolFlux = ',SolFlux[0]
 
     if (det le 2) then begin
       ;
@@ -629,7 +626,7 @@ function scattfunc,det,Lambda,LOS,R,Re,SolElong,a,df,solar_irr=solar_irr
       itest      = 1.0*(los ge Re*cos(SolElong))
       ScatAng    = (1.-itest)*PhaseAng + (itest)*(!pi - PhaseAng)
       if (n_elements(a) eq 9) then aaa        = a(3*det:3*det+2) ; original
-      if (n_elements(a) mod 2 eq 0) then aaa  = a ; N/2 HG functions
+      if (n_elements(a) mod 2 eq 0) then aaa  = a ; when using HG functions
       Phi        = phasefunc(ScatAng,aaa,dphi)
 
       ;
@@ -644,26 +641,26 @@ function scattfunc,det,Lambda,LOS,R,Re,SolElong,a,df,solar_irr=solar_irr
     ;
     ; Calculate Derivatives of Varying Parameters if Requested
     ; --------------------------------------------------------
-    if (want_partials) then begin
-
-        npts = n_elements(R)
-        npar = n_elements(a)
-        if (n_elements(df) ne npts*npar) then df = dblarr(npts,npar) $
-                                         else df = temporary(df)*0.0
-
-        if (det le 2) then begin
-        ; PF_C0
-        df(*,3*det) = SolFlux * CCscat * dphi(*,0)
-
-        ; PF_C1
-        df(*,3*det+1) = SolFlux * CCscat * dphi(*,1)
-
-        ; PF_Ka
-        df(*,3*det+2) = SolFlux * CCscat * dphi(*,2)
-
-	endif
-
-    endif
+;    if (want_partials) then begin
+;
+;        npts = n_elements(R)
+;        npar = n_elements(a)
+;        if (n_elements(df) ne npts*npar) then df = dblarr(npts,npar) $
+;                                         else df = temporary(df)*0.0
+;
+;        if (det le 2) then begin
+;        ; PF_C0
+;        df(*,3*det) = SolFlux * CCscat * dphi(*,0)
+;
+;        ; PF_C1
+;        df(*,3*det+1) = SolFlux * CCscat * dphi(*,1)
+;
+;        ; PF_Ka
+;        df(*,3*det+2) = SolFlux * CCscat * dphi(*,2)
+;
+;	endif
+;
+;    endif
 
 return,Scatt
 end    
@@ -687,7 +684,7 @@ end
 ;               parameter
 ;
 ;--------------------------------------------------------------
-function zsrcfunc,det,Scatt,Therm,a,df,dScatt,dTherm
+function zsrcfunc,det,Scatt,Therm,a,df,dScatt,dTherm,phase_type
 
     if (n_params(0) gt 3) then want_partials=1 else want_partials=0
  
@@ -708,12 +705,22 @@ function zsrcfunc,det,Scatt,Therm,a,df,dScatt,dTherm
     ; -------------------------------------------
     if (det ge 0) then begin
         Albedo = AlbedoDet(det)
-        Emiss  = EmissDet(det)
+        
+        ; In put_zpar.pro, the emissitivity for skysurf is put into the slow for detector = 2 (which corresponds to 3.5 micron)
+        ; So if using the 'skysurf' mode, use that emissivity
+        if phase_type eq 'skysurf' then begin
+          Emiss  = EmissDet(2)
+          
+        endif else if phase_type eq 'kelsall' then begin
+          Emiss  = EmissDet(det)
+          
+        endif
+        
     endif else begin
         Albedo   = 0.
         Emiss    = 1.
     endelse
-
+    
     ;
     ; Calculate Total Source per LOS Element
     ; ------------------------------------------
@@ -1437,6 +1444,164 @@ endif else Dens = x*0
 return,Dens
 end
 
+;--------------------------------------------------------------
+; Function new_isocloud
+;
+; Returns the number density of an isotropic-like cloud.
+; Copied the function for the smooth cloud, and modified.
+;
+; Added by: Rosalia O'Brien, Fall 2025
+;
+; Inputs:
+;   x,y,z - heliocentric cartesian coordinates
+;   R     - sqrt(x^2+y^2+z^2)
+;   Theta - Earth mean longitude
+;   a     - Model parameters
+;
+;--------------------------------------------------------------
+function new_isocloud,x,y,z,R,a,No,Alpha
+
+  ;  No = 1e-42
+  
+  FuncIndx = 2
+
+  if (No ne 0.0) then begin
+
+    d2r = !pi/180.
+
+    ;    Alpha    = -50.0
+    Beta     = 0.0
+    Gamma    = 0.0
+    Mu       = a(4)
+    Mu2      = a(5)
+    Mu3      = a(6)
+    Mu4      = a(7)
+    Mu5      = a(8)
+    Mu6      = a(9)
+    Mu7      = a(10)
+    Mu8      = a(11)
+    Mu9      = a(12)
+    Mu10     = a(13)
+
+    Omega    = 0.0 * d2r
+    Incl     = 0.0 * d2r
+    Xo       = 0.0
+    Yo       = 0.0
+    Zo       = 0.0
+
+    ;
+    ; Some frequently used geometry terms
+    ;
+    sino = sin(Omega)
+    coso = cos(Omega)
+    sini = sin(Incl)
+    cosi = cos(Incl)
+
+    ;
+    ; Translate origin from Sun to cloud center.
+    ;
+    Xp  = X - Xo
+    Yp  = Y - Yo
+    Zp  = Z - Zo
+    Rc  = sqrt( Xp^2 + Yp^2 + Zp^2 )
+
+    ;
+    ; Rotate into coord system of cloud to determine Z-height in cloud
+    ; (Zc) and radial distance in cloud symetry plane (Rc).
+    ; Perform rotation of Omega around Z-Axis to align X with cloud
+    ; line-of-nodes. Then, perform Incl rotation around X-Axis.
+    ;
+    Zc   = sino*sini*Xp - coso*sini*Yp + cosi*Zp
+    Zeta = abs(Zc/Rc)
+
+    ;
+    ; Compute Radial power-law parameter
+    ; Mark6p2  sets this to Rc, not R    20 May 1996
+    ; Mark6p7 allows the polynomial mods only beyond a cutoff radius
+    ; Mark6p8 puts is back the way it was, but keeps insistence on positive
+    ;         coeffs -- uses R, not Rc
+    ;
+    AlphaR = Alpha + ( Mu6^2*(R-1.) + Mu7^2*(R-1.)^2 + Mu8^2*(R-1.)^3 )
+    ;protection against overflow 12May1996
+    stuff = where(AlphaR gt 50.)
+    if (stuff(0) ne -1) then AlphaR(stuff) = 50.
+
+    ;
+    ; Radial and Latitudinal Density Distribution
+    ;
+    case FuncIndx of
+
+      ;
+      ; John Good Density Function
+      ;
+      0 : begin
+        Dc     = sqrt(Rc^2 - Zc^2)
+        ZoD    = abs(Zc/Dc)
+        ZoD2G  = ZoD^Gamma
+        Dens_Cloud_Vert = exp( -Beta * ZoD2G )
+        Dens_Cloud_Rad  = 1./Dc^AlphaR
+      end
+
+      ;
+      ; Modified Fan Density Function
+      ;
+      1 : begin
+        Zeta2G  = Zeta^Gamma
+        Dens_Cloud_Vert = exp( -Beta * Zeta2G )
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Widened Modified Fan Density Function
+      ;
+      2 : begin
+        GZR    = (0.5*Zeta^2/Mu) * (Zeta lt Mu) + $
+          (Zeta-0.5*Mu)   * (Zeta ge Mu)
+        GZR2G  = GZR^Gamma
+        Dens_Cloud_Vert = exp( -Beta * GZR2G )
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Ellipsoidal Density Function
+      ;
+      3 : begin
+        Bterm = (1. + (Beta*Zeta)^2)
+        Dens_Cloud_Vert = 1./Bterm^Gamma
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Cosine (Sombrero)
+      ;
+      4 : begin
+        cosB   = sqrt(1-Zeta^2)
+        cosB2G = cosB^Gamma
+        Dens_Cloud_Vert = (1. + Beta * cosB2G)/(1. + Beta)
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+      ;
+      ; Modified Fan Density Function with Polynomial Z-height
+      ;
+      5 : begin
+        aZ = abs(Z)
+        BetaZ = Beta + Mu3*aZ + Mu4*aZ^2 + Mu5*aZ^3
+        Dens_Cloud_Vert = exp( -BetaZ * Zeta )
+        Dens_Cloud_Rad  = 1./Rc^AlphaR
+      end
+
+    endcase
+    ;
+    ; Total Density of Cloud Component
+    ;
+    Dens = No * Dens_Cloud_Vert * Dens_Cloud_Rad
+
+  endif else Dens = x*0
+
+  return,Dens
+end
+
 
 ;
 ;----------------------------------------------------------------------------
@@ -1976,7 +2141,7 @@ end
 ;
 ;-------------------------------------------------------------------------------
 ;
-pro zkernel,data,a,f,df,indxpar=indxpar,losinfo=losinfo,no_colcorr=no_colcorr,dbwave=dbwave,solar_irr=solar_irr
+pro zkernel,data,a,phase_type,f,df,indxpar=indxpar,losinfo=losinfo,no_colcorr=no_colcorr,dbwave=dbwave,solar_irr=solar_irr,new_iso_comp=new_iso_comp,iso_comp_only=iso_comp_only
 
 if (keyword_set(losinfo)) then want_los_info=1 else want_los_info=0
 
@@ -2088,9 +2253,11 @@ aSrc_RB  = a(iSrc_RB)			; Vector of emissivity params
 ; Associate wavelengths with fullband detector numbers
 ; 1a=1b=1c=0 .... 9=b10
 ;
+if phase_type eq 'kelsall' then begin
 detnum = bytarr(npts) - 1
 for i=0,9 do $
     detnum = temporary(detnum) + ( data.wave_len eq dbwave(i) ) * (i+1)
+endif
 
 ;
 ; Calculate position of Earth in heliocentric ecliptic coords and
@@ -2206,11 +2373,11 @@ betathresh = 20. * d2r
 ; Set grid, weights for Gauss-Leguerre quadrature
 ; Define LOS Integration Points (from Earth in AU)
 ;
-if (abs(lat) gt betathresh) then begin
-    gaussint,0.,RANGE,los,gqwts,numpts=NUMBER_OF_STEPS
-endif else begin
-    simpint,0., RANGE,los,gqwts,stepsize=0.025
-endelse
+;if (abs(lat) gt betathresh) then begin
+;    gaussint,0.,RANGE,los,gqwts,numpts=NUMBER_OF_STEPS
+;endif else begin
+simpint,0., RANGE,los,gqwts,stepsize=0.025
+;endelse
 ;------------------------------------------------
     ;
     ; Position of LOS elements in Heliocentric Ecliptic coord system.
@@ -2225,33 +2392,56 @@ endelse
     ; Source Function per LOS element
     ; ------------------------------------------------------------------
     Lambda = double(data(ilos).wave_len)
-    Det    = detnum(ilos)
-    Scatt  = scattfunc(Det,Lambda,los,R,Re,SolElong(ilos),aScatt, solar_irr=solar_irr);,dScatt)
+    if phase_type eq 'kelsall' then begin
+      Det    = detnum(ilos)
+    endif
+    if phase_type eq 'skysurf' then begin
+      Det    = 0
+    endif
+    Scatt  = scattfunc(phase_type,Det,Lambda,los,R,Re,SolElong(ilos),aScatt, solar_irr=solar_irr);,dScatt)
     Therm  = thermfunc(Det,Lambda,R,aTherm,dTherm,no_colcorr=no_colcorr)
 
     ; 
     ; Calculate Density and Source Associated With Smooth Cloud Component
     ; -------------------------------------------------------------------
     Dens_C = zcloud(x,y,z,R,aDens_C,dDens_C,func=FuncIndx)
-    Src_C  = zsrcfunc(Det,Scatt,Therm,aSrc_C,dSrc_C,dSrc_dScatt_C,dSrc_dTherm_C)
+    Src_C  = zsrcfunc(Det,Scatt,Therm,aSrc_C,dSrc_C,dSrc_dScatt_C,dSrc_dTherm_C,phase_type)
 
     ;
     ; Calculate Density and Source Associated with Dust Bands
     ; -------------------------------------------------------------------
     Dens_B1 = migband(x,y,z,R,aDens_B1,dDens_B1)
-    Src_B1  = zsrcfunc(Det,Scatt,Therm,aSrc_B1,dSrc_B1,dSrc_dScatt_B1,dSrc_dTherm_B1)
+    Src_B1  = zsrcfunc(Det,Scatt,Therm,aSrc_B1,dSrc_B1,dSrc_dScatt_B1,dSrc_dTherm_B1,phase_type)
     Dens_B2 = migband(x,y,z,R,aDens_B2,dDens_B2)
-    Src_B2  = zsrcfunc(Det,Scatt,Therm,aSrc_B2,dSrc_B2,dSrc_dScatt_B2,dSrc_dTherm_B2)
+    Src_B2  = zsrcfunc(Det,Scatt,Therm,aSrc_B2,dSrc_B2,dSrc_dScatt_B2,dSrc_dTherm_B2,phase_type)
     Dens_B3 = migband(x,y,z,R,aDens_B3,dDens_B3)
-    Src_B3  = zsrcfunc(Det,Scatt,Therm,aSrc_B3,dSrc_B3,dSrc_dScatt_B3,dSrc_dTherm_B3)
+    Src_B3  = zsrcfunc(Det,Scatt,Therm,aSrc_B3,dSrc_B3,dSrc_dScatt_B3,dSrc_dTherm_B3,phase_type)
     Dens_B4 = migband(x,y,z,R,aDens_B4,dDens_B4)
-    Src_B4  = zsrcfunc(Det,Scatt,Therm,aSrc_B4,dSrc_B4,dSrc_dScatt_B4,dSrc_dTherm_B4)
+    Src_B4  = zsrcfunc(Det,Scatt,Therm,aSrc_B4,dSrc_B4,dSrc_dScatt_B4,dSrc_dTherm_B4,phase_type)
 
     ;
     ; Calculate Density and Source Associated with Solar Ring/Blobs
     ; -------------------------------------------------------------------
     Dens_RB = solring(x,y,z,R,Earth_Mean_Lon(ilos),aDens_RB,dDens_RB)
-    Src_RB  = zsrcfunc(Det,Scatt,Therm,aSrc_RB,dSrc_RB,dSrc_dScatt_RB,dSrc_dTherm_RB)
+    Src_RB  = zsrcfunc(Det,Scatt,Therm,aSrc_RB,dSrc_RB,dSrc_dScatt_RB,dSrc_dTherm_RB,phase_type)
+    
+    ; Isotropic-like cloud component (optional)
+    Dens_new = Dens_C*0
+    if (keyword_set(new_iso_comp)) then begin
+      No = 1.356e-9
+      Alpha = -1.46
+      Dens_new = new_isocloud(x,y,z,R,aDens_C,No,Alpha)
+    endif
+    
+    if (keyword_set(iso_comp_only)) then begin
+      Dens_C = Dens_C*0
+      Dens_B1 = Dens_B1*0
+      Dens_B2 = Dens_B2*0
+      Dens_B3 = Dens_B3*0
+      Dens_B4 = Dens_B4*0
+      Dens_RB = Dens_RB*0
+;      print,Dens_C
+    endif
 
     ;
     ; Calculate Total Zodi Brightness per LOS Element
@@ -2261,7 +2451,8 @@ endelse
            Src_B2 * Dens_B2 + $
            Src_B3 * Dens_B3 + $
            Src_B4 * Dens_B4 + $
-           Src_RB * Dens_RB
+           Src_RB * Dens_RB + $
+           Src_C  * Dens_new
    
     ;
     ; Integrate Along LOS to Get Total Intensity
@@ -2293,150 +2484,150 @@ endelse
     ;
     ; Calculate Derivatives of Varying Parameters if Requested
     ; --------------------------------------------------------
-    if (want_partials) then begin
-
-        ;
-        ; Scatt Function Partials
-        ;
-        for ii = 0,nScatt-1 do begin
-            ipar = parnum(windx(iScatt(ii)))
-            if (ipar ge 0) then begin
-                dSrcS = dScatt(*,ii) * ( $
-                        dSrc_dScatt_C  * Dens_C  + $
-                        dSrc_dScatt_B1 * Dens_B1 + $
-                        dSrc_dScatt_B2 * Dens_B2 + $
-                        dSrc_dScatt_B3 * Dens_B3 + $
-                        dSrc_dScatt_B4 * Dens_B4 + $
-                        dSrc_dScatt_RB * Dens_RB )
-                df(ilos,ipar) = df(ilos,ipar) + total(gqwts*dSrcS)
-            endif
-        endfor
-        ;
-        ; Therm Function Partials
-        ;
-        for ii = 0,nTherm-1 do begin
-            ipar = parnum(windx(iTherm(ii)))
-            if (ipar ge 0) then begin
-                dSrcT = dTherm(*,ii) * ( $
-                        dSrc_dTherm_C  * Dens_C  + $
-                        dSrc_dTherm_B1 * Dens_B1 + $
-                        dSrc_dTherm_B2 * Dens_B2 + $
-                        dSrc_dTherm_B3 * Dens_B3 + $
-                        dSrc_dTherm_B4 * Dens_B4 + $
-                        dSrc_dTherm_RB * Dens_RB )
-                df(ilos,ipar) = df(ilos,ipar) + total(gqwts*dSrcT)
-            endif
-        endfor
-
-        ;
-        ; Cloud Partials
-        ;
-        if (aDens_C(0) ne 0.0) then begin
-            for ii = 0,nDens_C-1 do begin
-                ipar = parnum(windx(iDens_C(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*Src_C*dDens_C(*,ii))
-            endfor
-            for ii = 0,nSrc_C-1 do begin
-                ipar = parnum(windx(iSrc_C(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*dSrc_C(*,ii)*Dens_C)
-            endfor
-        endif
-
-        ;
-        ; Band 1 Partials
-        ;
-        if (aDens_B1(0) ne 0.0) then begin
-            for ii = 0,nDens_B1-1 do begin
-                ipar = parnum(windx(iDens_B1(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*Src_B1*dDens_B1(*,ii))
-            endfor
-            for ii = 0,nSrc_B1-1 do begin
-                ipar = parnum(windx(iSrc_B1(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*dSrc_B1(*,ii)*Dens_B1)
-            endfor
-        endif
-
-        ;
-        ; Band 2 Partials
-        ;
-        if (aDens_B2(0) ne 0.0) then begin
-            for ii = 0,nDens_B2-1 do begin
-                ipar = parnum(windx(iDens_B2(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*Src_B2*dDens_B2(*,ii))
-            endfor
-            for ii = 0,nSrc_B2-1 do begin
-                ipar = parnum(windx(iSrc_B2(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*dSrc_B2(*,ii)*Dens_B2)
-            endfor
-        endif
-
-        ;
-        ; Band 3 Partials
-        ;
-        if (aDens_B3(0) ne 0.0) then begin
-            for ii = 0,nDens_B3-1 do begin
-                ipar = parnum(windx(iDens_B3(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*Src_B3*dDens_B3(*,ii))
-            endfor
-            for ii = 0,nSrc_B3-1 do begin
-                ipar = parnum(windx(iSrc_B3(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*dSrc_B3(*,ii)*Dens_B3)
-            endfor
-        endif
-
-        ;
-        ; Band 4 Partials
-        ;
-        if (aDens_B4(0) ne 0.0) then begin
-            for ii = 0,nDens_B4-1 do begin
-                ipar = parnum(windx(iDens_B4(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*Src_B4*dDens_B4(*,ii))
-            endfor
-            for ii = 0,nSrc_B4-1 do begin
-                ipar = parnum(windx(iSrc_B4(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*dSrc_B4(*,ii)*Dens_B4)
-            endfor
-        endif
-
-        ;
-        ; Solar Ring/Blob Partials
-        ;
-        if (aDens_RB(0) ne 0.0) then begin
-            for ii = 0,nDens_RB-1 do begin
-                ipar = parnum(windx(iDens_RB(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*Src_RB*dDens_RB(*,ii))
-            endfor
-            for ii = 0,nSrc_RB-1 do begin
-                ipar = parnum(windx(iSrc_RB(ii)))
-                if (ipar ge 0) then $
-                    df(ilos,ipar) = df(ilos,ipar) $
-                                  + total(gqwts*dSrc_RB(*,ii)*Dens_RB)
-            endfor
-        endif
-
-    endif
+;    if (want_partials) then begin
+;
+;        ;
+;        ; Scatt Function Partials
+;        ;
+;        for ii = 0,nScatt-1 do begin
+;            ipar = parnum(windx(iScatt(ii)))
+;            if (ipar ge 0) then begin
+;                dSrcS = dScatt(*,ii) * ( $
+;                        dSrc_dScatt_C  * Dens_C  + $
+;                        dSrc_dScatt_B1 * Dens_B1 + $
+;                        dSrc_dScatt_B2 * Dens_B2 + $
+;                        dSrc_dScatt_B3 * Dens_B3 + $
+;                        dSrc_dScatt_B4 * Dens_B4 + $
+;                        dSrc_dScatt_RB * Dens_RB )
+;                df(ilos,ipar) = df(ilos,ipar) + total(gqwts*dSrcS)
+;            endif
+;        endfor
+;        ;
+;        ; Therm Function Partials
+;        ;
+;        for ii = 0,nTherm-1 do begin
+;            ipar = parnum(windx(iTherm(ii)))
+;            if (ipar ge 0) then begin
+;                dSrcT = dTherm(*,ii) * ( $
+;                        dSrc_dTherm_C  * Dens_C  + $
+;                        dSrc_dTherm_B1 * Dens_B1 + $
+;                        dSrc_dTherm_B2 * Dens_B2 + $
+;                        dSrc_dTherm_B3 * Dens_B3 + $
+;                        dSrc_dTherm_B4 * Dens_B4 + $
+;                        dSrc_dTherm_RB * Dens_RB )
+;                df(ilos,ipar) = df(ilos,ipar) + total(gqwts*dSrcT)
+;            endif
+;        endfor
+;
+;        ;
+;        ; Cloud Partials
+;        ;
+;        if (aDens_C(0) ne 0.0) then begin
+;            for ii = 0,nDens_C-1 do begin
+;                ipar = parnum(windx(iDens_C(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*Src_C*dDens_C(*,ii))
+;            endfor
+;            for ii = 0,nSrc_C-1 do begin
+;                ipar = parnum(windx(iSrc_C(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*dSrc_C(*,ii)*Dens_C)
+;            endfor
+;        endif
+;
+;        ;
+;        ; Band 1 Partials
+;        ;
+;        if (aDens_B1(0) ne 0.0) then begin
+;            for ii = 0,nDens_B1-1 do begin
+;                ipar = parnum(windx(iDens_B1(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*Src_B1*dDens_B1(*,ii))
+;            endfor
+;            for ii = 0,nSrc_B1-1 do begin
+;                ipar = parnum(windx(iSrc_B1(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*dSrc_B1(*,ii)*Dens_B1)
+;            endfor
+;        endif
+;
+;        ;
+;        ; Band 2 Partials
+;        ;
+;        if (aDens_B2(0) ne 0.0) then begin
+;            for ii = 0,nDens_B2-1 do begin
+;                ipar = parnum(windx(iDens_B2(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*Src_B2*dDens_B2(*,ii))
+;            endfor
+;            for ii = 0,nSrc_B2-1 do begin
+;                ipar = parnum(windx(iSrc_B2(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*dSrc_B2(*,ii)*Dens_B2)
+;            endfor
+;        endif
+;
+;        ;
+;        ; Band 3 Partials
+;        ;
+;        if (aDens_B3(0) ne 0.0) then begin
+;            for ii = 0,nDens_B3-1 do begin
+;                ipar = parnum(windx(iDens_B3(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*Src_B3*dDens_B3(*,ii))
+;            endfor
+;            for ii = 0,nSrc_B3-1 do begin
+;                ipar = parnum(windx(iSrc_B3(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*dSrc_B3(*,ii)*Dens_B3)
+;            endfor
+;        endif
+;
+;        ;
+;        ; Band 4 Partials
+;        ;
+;        if (aDens_B4(0) ne 0.0) then begin
+;            for ii = 0,nDens_B4-1 do begin
+;                ipar = parnum(windx(iDens_B4(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*Src_B4*dDens_B4(*,ii))
+;            endfor
+;            for ii = 0,nSrc_B4-1 do begin
+;                ipar = parnum(windx(iSrc_B4(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*dSrc_B4(*,ii)*Dens_B4)
+;            endfor
+;        endif
+;
+;        ;
+;        ; Solar Ring/Blob Partials
+;        ;
+;        if (aDens_RB(0) ne 0.0) then begin
+;            for ii = 0,nDens_RB-1 do begin
+;                ipar = parnum(windx(iDens_RB(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*Src_RB*dDens_RB(*,ii))
+;            endfor
+;            for ii = 0,nSrc_RB-1 do begin
+;                ipar = parnum(windx(iSrc_RB(ii)))
+;                if (ipar ge 0) then $
+;                    df(ilos,ipar) = df(ilos,ipar) $
+;                                  + total(gqwts*dSrc_RB(*,ii)*Dens_RB)
+;            endfor
+;        endif
+;
+;    endif
 
     if ((ilos+1) mod nmsg eq 0) then print,'LOS # ',ilos
 

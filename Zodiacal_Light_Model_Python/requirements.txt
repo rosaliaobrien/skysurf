@@ -1,0 +1,17 @@
+# Core dependencies
+numpy>=1.19.0
+scipy>=1.7.0
+
+# Optional: For Numba JIT acceleration (highly recommended for large maps)
+numba>=0.55.0
+
+# Optional: For mapping, visualization, and the tutorial notebook
+healpy>=1.15.0
+matplotlib>=3.0.0
+jupyterlab>=3.0.0
+
+# Optional: Development and testing tools
+pytest>=6.0.0
+pytest-cov>=2.0.0
+black>=21.0.0
+flake8>=3.9.0

@@ -1,0 +1,106 @@
+# ZodiSURF: SKYSURF Zodiacal Light Modeling Package
+
+Python implementation of the Kelsall et al. (1998) zodiacal light model with SKYSURF enhancements ([O'Brien et al. 2026](https://scixplorer.org/abs/2026ApJ..1000....6O/abstract)).
+
+## Features
+
+- Ability to run the Kelsall et al. (1998) version and the SKYSURF version (O'Brien+2026).
+- **Wavelength Range**: 1.25-240 μm for the Kelsall model; 0.2-1.7 μm for the SKYSURF model.
+- **High Accuracy**: 0.0002% difference from IDL package.
+- **Fast Vectorization**: Evaluates millions of lines of sight in seconds via batched, multithreaded array processing.
+
+**Requirements:** Python ≥3.7, NumPy ≥1.19, SciPy ≥1.7
+
+## Usage
+
+```python
+from zodisurf import get_zmod
+import numpy as np
+
+# Single observation
+result = get_zmod(
+    lambda_=1.25,           # wavelength (microns)
+    phase_type='kelsall',   # 'kelsall' or 'skysurf'
+    day=100.0,              # day since 1990.0
+    lon=90.0,               # ecliptic longitude (deg)
+    lat=0.0,                # ecliptic latitude (deg)
+    L2=False                # set to True for Earth-Sun L2 (e.g., JWST)
+)
+print(f"Intensity: {result:.6f} MJy/sr")
+
+# Extremely fast array processing (e.g., generating maps)
+days = np.linspace(1, 365, 12)
+results = get_zmod(1.25, 'kelsall', days, 90.0, 0.0, n_jobs=-1)
+```
+
+## API
+
+### get_zmod(lambda_, phase_type, day, lon, lat, **kwargs)
+
+**Parameters:**
+- `lambda_` (float/array): Wavelength (0.2-240 μm)
+- `phase_type` (str): 'kelsall' or 'skysurf'
+- `day` (float/array): Day since 1990.0
+- `lon` (float/array): Ecliptic longitude (degrees)
+- `lat` (float/array): Ecliptic latitude (degrees)
+- `L2` (bool, optional): If True, puts observer at Earth-Sun L2 (default: False)
+- `n_jobs` (int, optional): CPU threads to use for large arrays. Default uses all cores. *(Note: Set to `1` if running inside MCMC or MPI pools to prevent thread-fighting).*
+- `zpar` (array, optional): Custom parameters (256 elements)
+- `solar_irr` (float, optional): Solar irradiance (in MJy/sr) corresponding to bandpass
+- `new_iso_comp` (bool, optional): If True, include isotropic component (default: False)
+- `iso_comp_only` (bool, optional): If True, model ONLY isotropic component (default: False)
+
+**Returns:** `numpy.ndarray` - Intensity in MJy/sr
+
+### read_zpars(filename=None)
+Load model parameters from JSON.
+
+### solar_sp(wavelength)
+Solar spectrum estimate (0.2-4.85 μm).
+
+## Model Components
+
+1. **Smooth Cloud** - Main interplanetary dust
+2. **Circumsolar Ring** - Dense dust near Sun
+3. **Dust Bands** - Four asteroid bands
+4. **Resonant Ring** - Earth's 1:1 orbital resonance
+5. **Blobs** - Leading/trailing features
+
+## Validation
+
+- **Kelsall**: 0.0002% error vs IDL
+- **SKYSURF**: 0.0005% error vs IDL
+
+Test: λ=1.25 μm, day=1.0, lon=0°, lat=90° → 0.114937 MJy/sr
+
+## Citation
+
+```bibtex
+@ARTICLE{OBrien_2026,
+       author = {{O'Brien}, Rosalia and {Arendt}, Richard G. and {Windhorst}, Rogier A. and {Acharya}, Tejovrash and {Calamida}, Annalisa and {Carleton}, Timothy and {Carter}, Delondrae and {Cohen}, Seth H. and {Dwek}, Eli and {Frye}, Brenda L. and et al.},
+        title = "{SKYSURF-11: A New Zodiacal Light Model Optimized for Optical Wavelengths}",
+      journal = {\apj},
+     keywords = {Observational cosmology, Diffuse radiation, Optical astronomy, Solar system, Zodiacal cloud, Cosmic background radiation, Hubble Space Telescope, 1146, 383, 1776, 1528, 1845, 317, 761},
+         year = 2026,
+        month = mar,
+       volume = {1000},
+       number = {1},
+          eid = {6},
+        pages = {6},
+          doi = {10.3847/1538-4357/ae4512},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2026ApJ..1000....6O},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+```
+
+## License
+
+MIT License
+
+## Authors
+
+Rosalia O'Brien, Tejovrash Acharya
+
+---
+
+For detailed examples, see `ZodiModel_Tutorial.ipynb`
