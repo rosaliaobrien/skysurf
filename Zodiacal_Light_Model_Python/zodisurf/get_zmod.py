@@ -34,6 +34,20 @@ _ENGINES = ('numpy', 'numba', 'ref')
 _DEFAULT_ENGINE = 'numpy'
 _FALLBACK_WARNED = set()
 
+_PHASE_TYPES = ('kelsall', 'skysurf', 'fitting')
+
+# Slot layout (matches put_zpar with det1=0, and zsrcfunc/scattfunc for 'skysurf')
+_SRC_SMOOTH = (33,)                    # smooth cloud (also used by the iso component)
+_SRC_BANDS = (59, 85, 111, 137)        # dust bands 1-4
+_SRC_RING = (170,)                     # resonant ring + blobs
+_SRC_ALL = _SRC_SMOOTH + _SRC_BANDS + _SRC_RING
+_HONG = slice(183, 189)                # g1, g2, g3, w1, w2, w3
+_ALB_OFF = 0
+_EM_OFF = 4
+
+NUMBA_VERIFY_EVERY_FIT_STEP = False
+_NUMBA_FIT_OK = set()
+
 
 def set_default_engine(engine):
     """Set the engine used when get_zmod is called without `engine=`."""
@@ -197,10 +211,60 @@ def mk_zdata(lambda_, day, lon, lat):
     return zdata
 
 
+def _broadcast_fitting(npts, **fits):
+    """Scalar, (npts,) for albedo/emissivity; (6,) or (npts, 6) for Hong."""
+    out = {}
+    for name, val in fits.items():
+        if val is None:
+            continue
+        v = np.asarray(val, dtype=float)
+        if name == 'hong':
+            if v.shape == (6,):
+                v = np.broadcast_to(v, (npts, 6))
+            if v.shape != (npts, 6):
+                raise ValueError(f"fitting_hong must have shape (6,) or "
+                                 f"({npts}, 6); got {v.shape}")
+        else:
+            if v.size == 1:
+                v = np.full(npts, float(v.ravel()[0]))
+            if v.shape != (npts,):
+                raise ValueError(f"fitting_{name} must be a scalar or shape "
+                                 f"({npts},); got {v.shape}")
+        if not np.all(np.isfinite(v)):
+            raise ValueError(f"fitting_{name} contains non-finite values")
+        out[name] = v
+    return out
+
+
+def _apply_fitting(zpar_u, inv, fit):
+    """One parameter row per unique (wavelength, fitting values). Returns (rows, group)."""
+    npts = inv.size
+    cols = [inv.reshape(npts, 1).astype(float)]
+    cols += [v.reshape(npts, -1) for v in fit.values()]
+    _, first, new_inv = np.unique(np.hstack(cols), axis=0,
+                                  return_index=True, return_inverse=True)
+
+    rows = zpar_u[inv[first]].copy()
+    for r, p in enumerate(first):
+        if 'hong' in fit:
+            rows[r, _HONG] = fit['hong'][p]
+        if 'albedo' in fit:
+            for s0 in _SRC_ALL:
+                rows[r, s0 + _ALB_OFF] = fit['albedo'][p]
+        for key, blocks in (('em_smooth', _SRC_SMOOTH),
+                            ('em_band', _SRC_BANDS),
+                            ('em_ring', _SRC_RING)):
+            if key in fit:
+                for s0 in blocks:
+                    rows[r, s0 + _EM_OFF] = fit[key][p]
+    return rows, np.asarray(new_inv).ravel()
+
+
 def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
              solar_irr=None, new_iso_comp=False, iso_comp_only=False,
-             engine=None, n_jobs=1, scatt_mode='auto',
-             _legacy=False):
+             engine=None, n_jobs=1, scatt_mode='auto', _legacy=False,
+             fitting_hong=None, fitting_albedo=None, fitting_em_band=None,
+             fitting_em_smooth=None, fitting_em_ring=None):
     """
     Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity
     for a given set of LOS, Wavelength, and Time.
@@ -210,8 +274,17 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     lambda_ : float or array
         Wavelength in microns
     phase_type : str
-        "kelsall" or "skysurf" - Whether to use the standard Kelsall+1998
-        phase function or the O'Brien+2026 phase function
+        "kelsall" - standard Kelsall+1998 phase function
+        "skysurf" - O'Brien+2026 phase function / albedo / emissivity
+        "fitting" - SKYSURF physics (Hong phase function), with every
+                    scattering/emission value supplied by the caller:
+                      * ALL fitting_* arguments and solar_irr are REQUIRED
+                      * get_albedo, get_hong_params, get_mult, get_emiss and
+                        solar_sp are NOT used
+                      * the 3.5 micron limit is not enforced
+                      * the output is NOT rounded
+                    Cloud geometry and thermal parameters (To1, Delta) still
+                    come from zpar.
     day : array_like
         1990 day number(s), where 1.0 = 1 Jan 1990
     lon : array_like
@@ -222,8 +295,9 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         If True, then put observer at Earth-Sun L2 (e.g., JWST)
     zpar : array_like, optional
         Array of zodi model params. If not specified, defaults are loaded
-    solar_irr : float, optional
-        Solar irradiance (in MJy/sr) corresponding to bandpass
+    solar_irr : float or array (required for 'fitting')
+        Solar irradiance (in MJy/sr) corresponding to bandpass. In 'fitting'
+        mode a single value is applied to every pixel.
     new_iso_comp : bool, optional
         If True, include isotropic component (default: False)
     iso_comp_only : bool, optional
@@ -236,17 +310,35 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
                     ~4x faster on a single core. Falls back to 'numpy' if
                     numba is unavailable or a safety guard trips.
           'ref'   - original per-pixel loop (slow, for validation)
+                    NOTE: not currently wired up; falls through to 'numpy'.
     n_jobs : int, optional
-        Threads to use (default: 1 cire). Set to 1 inside MCMC/MPI pools. Set to -1 to use all available cores.
+        Threads to use (default: 1 core). Set to 1 inside MCMC/MPI pools.
+        Set to -1 to use all available cores.
     scatt_mode : str, optional
         'auto' (default), 'vector' or 'loop'; see zkernel_fast
     _legacy : bool, optional
         Deprecated alias for engine='ref'
 
+    Fitting parameters (REQUIRED when phase_type='fitting', not allowed otherwise):
+    -------------------------------------------------------------------------------
+    fitting_hong : array_like
+        Hong parameters [g1, g2, g3, w1, w2, w3]; written to zpar[183:189].
+        Shape (6,) for all pixels, or (npts, 6) per pixel.
+    fitting_albedo : float or array_like
+        Albedo applied to every component. Scalar or shape (npts,).
+    fitting_em_smooth : float or array_like
+        Emissivity of the smooth cloud (also used by the isotropic
+        component). Scalar or shape (npts,).
+    fitting_em_band : float or array_like
+        Emissivity of dust bands 1-4. Scalar or shape (npts,).
+    fitting_em_ring : float or array_like
+        Emissivity of the resonant ring + blobs. Scalar or shape (npts,).
+
     Returns:
     --------
     numpy.ndarray
-        Scalar or array of zodi model intensity in MJy sr^-1
+        Zodi model intensity in MJy sr^-1 (rounded to 5 decimals, except
+        when phase_type='fitting')
     """
 
     # Use all cores if n_jobs == -1
@@ -254,18 +346,46 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     if n_jobs == -1 or n_jobs is None:
         n_jobs = os.cpu_count() or 1
 
-    lambda_ = np.atleast_1d(np.asarray(lambda_, dtype=float)) # wavelengths
+    lambda_ = np.atleast_1d(np.asarray(lambda_, dtype=float))  # wavelengths
     day = np.atleast_1d(np.asarray(day, dtype=float))
     lon = np.atleast_1d(np.asarray(lon, dtype=float))
     lat = np.atleast_1d(np.asarray(lat, dtype=float))
 
-    # The code allows the wavelength array to be just one number, 
-    # in case you want to calculate a bunch of different pointings at the same wavelength
+    # The wavelength array may be a single number, so you can compute many
+    # pointings at the same wavelength
     if lambda_.size == 1 and lambda_.shape != day.shape:
         lambda_ = np.full_like(day, lambda_[0], dtype=float)
 
+    # ---- phase type ---------------------------------------------------
+    if phase_type not in _PHASE_TYPES:
+        raise ValueError(f"phase_type must be one of {_PHASE_TYPES}, got {phase_type!r}")
+
+    fit_mode = (phase_type == 'fitting')
+    kernel_phase = 'skysurf' if fit_mode else phase_type   # what the kernels see
+
+    # Keys match the argument names (fitting_<key>), so error messages
+    # can name exactly what is missing.
+    fit_args = dict(hong=fitting_hong, albedo=fitting_albedo,
+                    em_smooth=fitting_em_smooth, em_band=fitting_em_band,
+                    em_ring=fitting_em_ring)
+
+    if fit_mode:
+        missing = [f"fitting_{k}" for k, v in fit_args.items() if v is None]
+        if solar_irr is None:
+            # Without solar_irr the kernels would call solar_sp, which
+            # 'fitting' must not use.
+            missing.append("solar_irr")
+        if missing:
+            raise ValueError("phase_type='fitting' requires every fitting value; "
+                             "missing: " + ", ".join(missing))
+    elif any(v is not None for v in fit_args.values()):
+        raise ValueError("fitting_* arguments require phase_type='fitting'")
+
+    # ---- solar irradiance ---------------------------------------------
     if solar_irr is not None:
-        solar_irr = np.atleast_1d(solar_irr)
+        solar_irr = np.atleast_1d(np.asarray(solar_irr, dtype=float))
+        if fit_mode and solar_irr.size == 1 and lambda_.size > 1:
+            solar_irr = np.full(lambda_.shape, solar_irr[0])
 
     # Base shapes that must always match
     if not (lambda_.shape == day.shape == lon.shape == lat.shape):
@@ -279,10 +399,12 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         raise ValueError(
             f"Shape mismatch: solar_irr {solar_irr.shape} must match lambda_ {lambda_.shape}."
         )
+    if fit_mode and not np.all(np.isfinite(solar_irr)):
+        raise ValueError("solar_irr contains non-finite values")
 
-    if phase_type not in ['kelsall', 'skysurf']:
-        raise ValueError("phase_type must be either 'kelsall' or 'skysurf'")
-    if phase_type == 'skysurf' and np.any(lambda_ > 3.5): # At 3.5 micron, thermal emission starts to kick in, and HST really couldn't calibrate that. So, let's ignore these wavelengths.
+    # At 3.5 micron, thermal emission starts to kick in, and HST really couldn't
+    # calibrate that. So ignore these wavelengths -- except when fitting.
+    if phase_type == 'skysurf' and np.any(lambda_ > 3.5):
         raise ValueError("This code does not work at lambda > 3.5 micron.")
     if np.any(lon < 0) or np.any(lon > 360):
         raise ValueError("Longitude (lon) must be in the range 0 to 360 degrees.")
@@ -291,7 +413,7 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
 
     # ---- engine resolution -------------------------------------------
     if _legacy:
-        engine = 'ref' # this is the original idl routine that loops through every pointing (and is therefore slow)
+        engine = 'ref'  # original IDL-style per-pointing loop (slow)
     if engine is None:
         engine = _DEFAULT_ENGINE
     if engine not in _ENGINES:
@@ -301,15 +423,16 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     if zpar is None:
         zpar = _default_zpar()
     else:
-        zpar = np.array(zpar, dtype=float) # you can give custom input parameters
+        zpar = np.array(zpar, dtype=float)  # custom input parameters
 
     # ---- build parameters ONCE per unique wavelength -------------------
     lam_u, inv = np.unique(lambda_, return_inverse=True)
     inv = np.asarray(inv).ravel()
 
-    if phase_type == 'kelsall':
+    if phase_type in ('kelsall', 'fitting'):
+        # 'fitting' starts from zpar as-is: no SKYSURF tables
         zpar_u = np.tile(zpar, (len(lam_u), 1))
-    if phase_type == 'skysurf':
+    elif phase_type == 'skysurf':
         albedo_arr = get_albedo(lam_u)
         hong_params_arr = get_hong_params(lam_u)
         mult_arr = get_mult(lam_u)
@@ -323,21 +446,36 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         raise RuntimeError(f"Expected {len(lam_u)} parameter rows, "
                            f"got {zpar_u.shape[0]}.")
 
+    # ---- fitting values (written on top of zpar) -----------------------
+    if fit_mode:
+        fit = _broadcast_fitting(lambda_.size, **fit_args)
+        zpar_u, inv = _apply_fitting(zpar_u, inv, fit)
+
     data = mk_zdata(lambda_, day, lon, lat)
 
-    kw = dict(phase_type=phase_type, L2=L2, no_colcorr=True,
+    kw = dict(phase_type=kernel_phase, L2=L2, no_colcorr=True,
               solar_irr=solar_irr, new_iso_comp=new_iso_comp,
               iso_comp_only=iso_comp_only)
+
+    def _finish(zodi):
+        return zodi if fit_mode else np.round(zodi, 5)
 
     # ---- 'numba' engine, with fallback --------------------------------
     if engine == 'numba':
         if zkernel_numba is None or not NUMBA_AVAILABLE:
             reason = "numba is not installed"
         else:
+            # In fitting mode, verify against numpy once per configuration
+            # (not every MCMC step).
+            vkey = (L2, new_iso_comp, iso_comp_only, tuple(lam_u.tolist()))
+            skip = (fit_mode and not NUMBA_VERIFY_EVERY_FIT_STEP
+                    and vkey in _NUMBA_FIT_OK)
             try:
-                zodi = zkernel_numba(data, zpar_u, group=inv,
-                                     n_jobs=n_jobs, **kw)
-                return np.round(zodi, 5)
+                zodi = zkernel_numba(data, zpar_u, group=inv, n_jobs=n_jobs,
+                                     _verified=skip, **kw)
+                if fit_mode:
+                    _NUMBA_FIT_OK.add(vkey)
+                return _finish(zodi)
             except RuntimeError as e:
                 reason = str(e)
         if reason not in _FALLBACK_WARNED:
@@ -350,16 +488,4 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     # ---- 'numpy' engine ------------------------------------------------
     zodi = zkernel_fast(data, zpar_u, group=inv, n_jobs=n_jobs,
                         scatt_mode=scatt_mode, **kw)
-    return np.round(zodi, 5)
-
-
-# Example usage
-if __name__ == "__main__":
-    lambda_val = 1.25
-    phase_type = 'kelsall'
-    day = np.array([1.0, 2.0, 3.0])
-    lon = np.array([1.0, 10.0, 20.0])
-    lat = np.array([1.0, 5.0, 10.0])
-
-    zodi = get_zmod(lambda_val, phase_type, day, lon, lat)
-    print("Zodiacal light intensity:", zodi)
+    return _finish(zodi)

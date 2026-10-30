@@ -456,36 +456,6 @@ def guard_reason(a, phase_type, no_colcorr):
     return None
 
 
-_VERIFIED = {}
-
-
-def _verify(data, a, group, kw, nsample=96, rtol=1e-9):
-    """One-time check of the Numba kernel against zkernel_fast on a subset."""
-    from zodisurf.zkernel_fast import zkernel_fast
-    key = (kw['phase_type'], kw['L2'], kw['new_iso_comp'], kw['iso_comp_only'],
-           hash(np.ascontiguousarray(a).tobytes()))
-    if key in _VERIFIED:
-        return _VERIFIED[key]
-
-    n = len(data)
-    idx = np.linspace(0, n - 1, min(nsample, n)).astype(int)
-    sub, gsub = data[idx], group[idx]
-    try:
-        ref = zkernel_fast(sub, a, group=gsub, n_jobs=1, **kw)
-        got = zkernel_numba(sub, a, group=gsub, _verified=True, **kw)
-        denom = np.maximum(np.abs(ref), 1e-30)
-        ok = bool(np.all(np.abs(got - ref) / denom < rtol))
-        worst = float(np.max(np.abs(got - ref) / denom))
-    except Exception as e:                             # noqa: BLE001
-        ok, worst = False, float('nan')
-        print(f"[zkernel_numba] verification raised {type(e).__name__}: {e}")
-    if not ok:
-        print(f"[zkernel_numba] verification FAILED (worst rel diff {worst:.3g}); "
-              "falling back to the NumPy kernel.")
-    _VERIFIED[key] = ok
-    return ok
-
-
 def warmup(phase_type='skysurf'):
     """Trigger JIT compilation (and populate the on-disk cache) up front."""
     from zodisurf.get_zmod import get_zmod
@@ -498,10 +468,16 @@ def warmup(phase_type='skysurf'):
 # ======================================================================
 def zkernel_numba(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
                   solar_irr=None, new_iso_comp=False, iso_comp_only=False,
-                  group=None, n_jobs=None, _verified=False):
+                  group=None, n_jobs=None, _verified=None):
     """
     Numba equivalent of zkernel_fast. Raises RuntimeError if a guard trips;
     callers should fall back to zkernel_fast in that case.
+
+    No runtime self-verification is performed. Validate against
+    zkernel_fast with the test suite after any change to the physics
+    functions in zkernelpy_original (scattfunc, thermfunc, densities, ...).
+
+    `_verified` is accepted for backward compatibility and ignored.
     """
     from zodisurf.zkernelpy_original import earthsun
 
@@ -527,12 +503,6 @@ def zkernel_numba(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
         else:
             raise ValueError("zpar must have 1 row, npts rows, or be given with `group`.")
     group = np.asarray(group, dtype=np.int64).ravel()
-
-    kw = dict(phase_type=phase_type, L2=L2, no_colcorr=no_colcorr,
-              solar_irr=solar_irr, new_iso_comp=new_iso_comp,
-              iso_comp_only=iso_comp_only)
-    if not _verified and not _verify(data, a, group, kw):
-        raise RuntimeError("Numba kernel failed self-verification")
 
     if n_jobs is not None and NUMBA_AVAILABLE:
         set_num_threads(max(1, int(n_jobs)))
