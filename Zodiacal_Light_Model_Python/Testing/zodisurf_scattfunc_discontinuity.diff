@@ -1,0 +1,44 @@
+--- zkernelpy.py.orig
++++ zkernelpy.py
+@@ -582,6 +582,28 @@
+     Returns:
+     grid (np.ndarray): Grid of abscissae
+     wts (np.ndarray): Weights for Simpson's integration
++
++    KNOWN ISSUE (reported by a user; see the accompanying README for the full write-up and a reproducer):
++    because `stepsize` is fixed, the number and absolute placement of the line-of-sight quadrature nodes
++    depend on `b` alone. When `b` (RANGE, the outer integration bound in zkernel()) drifts smoothly with
++    time -- which it always does a little, since it derives from the Earth-Sun distance -- the discrete
++    nodes drift too. Where the integrand along the line of sight is genuinely smooth this is harmless.
++    But scattfunc()'s `itest = (LOS >= Re*cos(SolElong))` branch (see the comment there) introduces a
++    slope discontinuity in the scattering-angle profile at a THIRD, independently-computed location along
++    the line of sight. Whenever a drifting quadrature node crosses that fixed location, the Simpson-weighted
++    sum jumps by a small but real amount (order 1e-4 to 1e-3 relative, in our tests) for a single time step,
++    then is smooth again -- because the node's assignment to one side of the kink or the other has flipped.
++    This is invisible for a flat, in-ecliptic-plane observer (RANGE only tracks Earth's slow, ~1-year
++    eccentricity variation, e.g. the stock 'L2' mode or the original 2D approximation), but becomes far
++    more frequent -- roughly every 5-7 months in our tests -- for an observer with real out-of-ecliptic
++    motion (e.g. a halo orbit fed in via a 3D `obs_xyz_au`, as in a downstream patch we used), since that
++    adds a faster libration on top of Earth's own drift. Confirmed by: (a) evaluating at sub-hourly time
++    resolution, ruling out a plotting/sampling artifact; (b) instrumenting zkernel() directly, showing every
++    dust-density component (zcloud, migband x4, solring) stays smooth across the jump while only `Scatt`
++    (scattfunc's return value) steps; (c) shrinking `stepsize` 5x shrinks the jump by a similar factor at
++    the same timestamp, the standard signature of a quadrature-discretization artifact rather than a
++    genuine feature. (Separately: grid/wts below are float32, per the "match IDL exactly" comment a few
++    lines down -- single precision on top of the above, though we have not tested how much it contributes.)
+     """
+     h = stepsize
+     tsteps = int(round(b/h)) + 1  # total number of grid points
+@@ -680,6 +702,12 @@
+ 
+         # Phase angle calculation (match IDL logic)
+         phase_ang = np.arcsin(np.clip(Re / R * np.sin(SolElong), -1.0, 1.0))
++        # NOTE: this hard switch is exact and continuous in scat_ang itself (phase_ang == pi - phase_ang
++        # at the boundary LOS == Re*cos(SolElong)), but its DERIVATIVE w.r.t. LOS flips sign there, i.e. the
++        # scattering-angle profile along the line of sight has a slope kink at this point. Integrated with a
++        # fixed-stepsize quadrature (simpint(), above) whose node positions drift with the integration bound
++        # `RANGE`, this kink produces small (order 1e-4 to 1e-3 relative) but real jumps in the integrated
++        # brightness whenever a node crosses it -- see simpint()'s docstring for the full write-up.
+         itest = (LOS >= Re * np.cos(SolElong))
+         scat_ang = np.where(itest, np.pi - phase_ang, phase_ang)
+ 
