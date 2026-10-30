@@ -1,60 +1,18 @@
-import json
-import os
-import warnings
-
 import numpy as np
+import json
 from scipy.interpolate import interp1d
 
-from zodisurf.zkernelpy_original import get_parnames
-from zodisurf.zkernel_fast import zkernel_fast
-from zodisurf.skysurf_params import (get_albedo, get_hong_params, get_mult,
-                                     get_emiss, put_zpar)
-from zodisurf.solar_sp import solar_sp
-
-try:
-    from zodisurf.zkernel_numba import zkernel_numba, NUMBA_AVAILABLE
-except Exception as e:
-    zkernel_numba, NUMBA_AVAILABLE = None, False
-    print(f"[get_zmod] numba engine disabled: {type(e).__name__}: {e}")
-
-__all__ = ['get_zmod', 'read_zpars', 'mk_zdata',
-           'set_default_engine', 'get_default_engine']
-
-# ----------------------------------------------------------------------
-#  Engine selection
-#
-#  'numpy' (default) : batched NumPy kernel.
-#  'numba'           : compiled scalar kernel. ~4x faster single-core.
-#                      Falls back to 'numpy' if numba is unavailable or a
-#                      safety guard trips.
-#  'ref'             : original per-pixel loop (as done in the original 
-#                      IDL code). Slow; for validation.
-# ----------------------------------------------------------------------
-_ENGINES = ('numpy', 'numba', 'ref')
-_DEFAULT_ENGINE = 'numpy'
-_FALLBACK_WARNED = set()
-
-
-def set_default_engine(engine):
-    """Set the engine used when get_zmod is called without `engine=`."""
-    global _DEFAULT_ENGINE
-    if engine not in _ENGINES:
-        raise ValueError(f"engine must be one of {_ENGINES}, got {engine!r}")
-    _DEFAULT_ENGINE = engine
-
-
-def get_default_engine():
-    return _DEFAULT_ENGINE
-
+from .zkernelpy import zkernel, get_parnames
+from .skysurf_params import get_albedo, get_hong_params, get_mult, get_emiss, put_zpar
+from .solar_sp import solar_sp
 
 def read_zpars(filename=None):
     """
-    Reads the ZODI model parameters from a JSON file and returns them in the
-    exact order expected by the model. Uses a mapping from model parameter
-    names to JSON keys. Any missing parameters are filled with 0.0 for albedo,
-    1.0 for emissivity, otherwise 0.0.
+    Reads the ZODI model parameters from a JSON file and returns them in the exact order expected by the model.
+    Uses a mapping from model parameter names to JSON keys. Any missing parameters are filled with 0.0 for albedo/emissivity, 1.0 for emissivity if needed, otherwise 0.0.
     """
     if filename is None:
+        import os
         filename = os.path.join(os.path.dirname(__file__), 'aend_og_wlabels.json')
     param_map = {
         # Smooth cloud
@@ -87,18 +45,13 @@ def read_zpars(filename=None):
         'B2_E3': 'E3_B2', 'B2_E4': 'E4_B2', 'B2_E5': 'E5_B2', 'B2_E6': 'E6_B2', 'B2_E7': 'E7_B2',
         'B2_E8': 'E8_B2', 'B2_E9': 'E9_B2', 'B2_E10': 'E10_B2',
         # Band 3 (uses ignored_BZ parameters)
-        'B3_No': 'ignored_BZ0', 'B3_Dz': 'ignored_BZ1', 'B3_Dr': 'ignored_BZ2',
-        'B3_Ro': 'ignored_BZ3',
-        'B3_Vi': 'ignored_BZ4', 'B3_Vr': 'ignored_BZ5', 'B3_Pi': 'ignored_BZ6',
-        'B3_Pr': 'ignored_BZ7', 'B3_P2r': 'ignored_BZ8',
+        'B3_No': 'ignored_BZ0', 'B3_Dz': 'ignored_BZ1', 'B3_Dr': 'ignored_BZ2', 'B3_Ro': 'ignored_BZ3',
+        'B3_Vi': 'ignored_BZ4', 'B3_Vr': 'ignored_BZ5', 'B3_Pi': 'ignored_BZ6', 'B3_Pr': 'ignored_BZ7', 'B3_P2r': 'ignored_BZ8',
         'B3_Omega': 'ignored_BZ9', 'B3_Incl': 'ignored_BZ10',
         'B3_Xo': 'ignored_BZ11', 'B3_Yo': 'ignored_BZ12', 'B3_Zo': 'ignored_BZ13',
-        'B3_A1': 'ignored_BZ14', 'B3_A2': 'ignored_BZ15', 'B3_A3': 'ignored_BZ16',
-        'B3_A4': 'ignored_BZ17',
-        'B3_E3': 'ignored_BZ18', 'B3_E4': 'ignored_BZ19', 'B3_E5': 'ignored_BZ20',
-        'B3_E6': 'ignored_BZ21',
-        'B3_E7': 'ignored_BZ22', 'B3_E8': 'ignored_BZ23', 'B3_E9': 'ignored_BZ24',
-        'B3_E10': 'ignored_BZ25',
+        'B3_A1': 'ignored_BZ14', 'B3_A2': 'ignored_BZ15', 'B3_A3': 'ignored_BZ16', 'B3_A4': 'ignored_BZ17',
+        'B3_E3': 'ignored_BZ18', 'B3_E4': 'ignored_BZ19', 'B3_E5': 'ignored_BZ20', 'B3_E6': 'ignored_BZ21',
+        'B3_E7': 'ignored_BZ22', 'B3_E8': 'ignored_BZ23', 'B3_E9': 'ignored_BZ24', 'B3_E10': 'ignored_BZ25',
         # Band 4 (uses nB3/dXB3 parameters)
         'B4_No': 'nB3', 'B4_Dz': 'dXB3', 'B4_Dr': 'dRB3', 'B4_Ro': 'idk33',
         'B4_Vi': 'nuB3', 'B4_Vr': 'idk34', 'B4_Pi': 'idk35', 'B4_Pr': 'idk36', 'B4_P2r': 'idk37',
@@ -111,18 +64,16 @@ def read_zpars(filename=None):
         'SR_No': 'nSR', 'SR_R': 'R_SR', 'SR_dR': 'sigma_rSR', 'SR_dZ': 'sigma_zSR',
         # Leading Blob
         'LB_No': 'leading_blob_n', 'LB_R': 'leading_blob_R', 'LB_dR': 'leading_blob_dR',
-        'LB_Theta': 'leading_blob_theta', 'LB_dTheta': 'leading_blob_dtheta',
-        'LB_dZ': 'leading_blob_dZ',
+        'LB_Theta': 'leading_blob_theta', 'LB_dTheta': 'leading_blob_dtheta', 'LB_dZ': 'leading_blob_dZ',
         # Trailing Blob
         'TB_No': 'trailing_blob_n', 'TB_R': 'R_TB', 'TB_dR': 'sigma_rTB',
         'TB_Theta': 'theta_TB', 'TB_dTheta': 'sigma_thetaTB', 'TB_dZ': 'sigma_zTB',
         # RB Geometry
-        'RB_Omega': 'OmegaRB', 'RB_Incl': 'iRB', 'RB_Xo': 'blob_X0',
-        'RB_Yo': 'blob_Y0', 'RB_Zo': 'blob_Z0',
+        'RB_Omega': 'OmegaRB', 'RB_Incl': 'iRB', 'RB_Xo': 'blob_X0', 'RB_Yo': 'blob_Y0', 'RB_Zo': 'blob_Z0',
         # RB Albedo and Emissivity
         'RB_A1': 'A1_SR', 'RB_A2': 'A2_SR', 'RB_A3': 'A3_SR', 'RB_A4': 'A4_SR',
-        'RB_E3': 'E3_SR', 'RB_E4': 'E4_SR', 'RB_E5': 'E5_SR', 'RB_E6': 'E6_SR',
-        'RB_E7': 'E7_SR', 'RB_E8': 'E8_SR', 'RB_E9': 'E9_SR', 'RB_E10': 'E10_SR'
+        'RB_E3': 'E3_SR', 'RB_E4': 'E4_SR', 'RB_E5': 'E5_SR', 'RB_E6': 'E6_SR', 'RB_E7': 'E7_SR',
+        'RB_E8': 'E8_SR', 'RB_E9': 'E9_SR', 'RB_E10': 'E10_SR'
     }
     try:
         with open(filename, 'r') as f:
@@ -131,6 +82,7 @@ def read_zpars(filename=None):
         zpar = []
         for name in parnames:
             json_key = param_map.get(name, name)
+            # Albedo and emissivity logic
             if name.startswith(('C_A', 'B1_A', 'B2_A', 'B3_A', 'SR_A', 'B4_A', 'RB_A')):
                 val = data.get(json_key, 0.0)
             elif name.startswith(('C_E', 'B1_E', 'B2_E', 'B3_E', 'SR_E', 'B4_E', 'RB_E')):
@@ -142,20 +94,6 @@ def read_zpars(filename=None):
     except Exception as e:
         print(f"Error reading data from '{filename}': {e}")
         return None
-
-
-# Default parameters are read from disk once and then reused
-_DEFAULT_ZPAR = None
-
-
-def _default_zpar():
-    global _DEFAULT_ZPAR
-    if _DEFAULT_ZPAR is None:
-        _DEFAULT_ZPAR = read_zpars()
-        if _DEFAULT_ZPAR is None:
-            raise RuntimeError("Could not read default zodi parameters "
-                               "(aend_og_wlabels.json).")
-    return _DEFAULT_ZPAR.copy()        # copy: protects the cache from in-place edits
 
 
 def mk_zdata(lambda_, day, lon, lat):
@@ -171,9 +109,9 @@ def mk_zdata(lambda_, day, lon, lat):
 
     for arr, name in zip([lambda_, day, lon, lat], ['lambda', 'day', 'lon', 'lat']):
         if len(arr) != 1 and len(arr) != npts:
-            raise ValueError(f"{name} must be a scalar or match the length of "
-                             f"the longest input ({npts}).")
+            raise ValueError(f"{name} must be a scalar or match the length of the longest input ({npts}).")
 
+    # Broadcast inputs
     lambda_ = np.resize(lambda_, npts)
     day = np.resize(day, npts)
     lon = np.resize(lon, npts)
@@ -196,22 +134,18 @@ def mk_zdata(lambda_, day, lon, lat):
 
     return zdata
 
-
-def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
-             solar_irr=None, new_iso_comp=False, iso_comp_only=False,
-             engine=None, n_jobs=1, scatt_mode='auto',
-             _legacy=False):
+def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False,obsxyz=None):
     """
-    Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity
+    Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity 
     for a given set of LOS, Wavelength, and Time.
-
+    
     Parameters:
     -----------
     lambda_ : float or array
         Wavelength in microns
     phase_type : str
-        "kelsall" or "skysurf" - Whether to use the standard Kelsall+1998
-        phase function or the O'Brien+2026 phase function
+        "kelsall" or "skysurf" - Whether to use the standard Kelsall+1998 
+        phase function or the O'Brien+2025 phase function
     day : array_like
         1990 day number(s), where 1.0 = 1 Jan 1990
     lon : array_like
@@ -224,139 +158,101 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         Array of zodi model params. If not specified, defaults are loaded
     solar_irr : float, optional
         Solar irradiance (in MJy/sr) corresponding to bandpass
+    no_colcorr : bool, optional
+        If True, returns actual intensity instead of quoted intensity
     new_iso_comp : bool, optional
         If True, include isotropic component (default: False)
     iso_comp_only : bool, optional
         If True, model ONLY isotropic component (default: False)
-    engine : {'numpy', 'numba', 'ref'}, optional
-        Compute backend. Default is the module default (see
-        set_default_engine), initially 'numpy'.
-          'numpy' - batched NumPy; bit-identical to the original code
-          'numba' - compiled scalar loops; ~1e-13 relative difference,
-                    ~4x faster on a single core. Falls back to 'numpy' if
-                    numba is unavailable or a safety guard trips.
-          'ref'   - original per-pixel loop (slow, for validation)
-    n_jobs : int, optional
-        Threads to use (default: 1 cire). Set to 1 inside MCMC/MPI pools. Set to -1 to use all available cores.
-    scatt_mode : str, optional
-        'auto' (default), 'vector' or 'loop'; see zkernel_fast
-    _legacy : bool, optional
-        Deprecated alias for engine='ref'
+    obsxyz : list[3], optional
+        if not None, uses spacecraft telemetry data to calculate observation point rather than assuming earth or L2-based observations
 
     Returns:
     --------
-    numpy.ndarray
+    array_like
         Scalar or array of zodi model intensity in MJy sr^-1
     """
+    
+    # Input validation
+    lambda_ = np.atleast_1d(lambda_)
+    day = np.atleast_1d(day)
+    lon = np.atleast_1d(lon)
+    lat = np.atleast_1d(lat)
 
-    # Use all cores if n_jobs == -1
-    # Use just 1 core if n_jobs is None (but it should never be None)
-    if n_jobs == -1 or n_jobs is None:
-        n_jobs = os.cpu_count() or 1
-
-    lambda_ = np.atleast_1d(np.asarray(lambda_, dtype=float)) # wavelengths
-    day = np.atleast_1d(np.asarray(day, dtype=float))
-    lon = np.atleast_1d(np.asarray(lon, dtype=float))
-    lat = np.atleast_1d(np.asarray(lat, dtype=float))
-
-    # The code allows the wavelength array to be just one number, 
-    # in case you want to calculate a bunch of different pointings at the same wavelength
+    # If lambda_ is a single value, broadcast it to the shape of the coordinates
     if lambda_.size == 1 and lambda_.shape != day.shape:
         lambda_ = np.full_like(day, lambda_[0], dtype=float)
 
     if solar_irr is not None:
         solar_irr = np.atleast_1d(solar_irr)
 
-    # Base shapes that must always match
+    # Check if lambda_ matches the shape of day, lon, and lat
     if not (lambda_.shape == day.shape == lon.shape == lat.shape):
         raise ValueError(
             f"Shape mismatch: lambda_ {lambda_.shape} must match "
             f"day {day.shape}, lon {lon.shape}, and lat {lat.shape}."
         )
 
-    # Include solar_irr in the shape check only if it's provided
-    if solar_irr is not None and solar_irr.shape != lambda_.shape:
-        raise ValueError(
-            f"Shape mismatch: solar_irr {solar_irr.shape} must match lambda_ {lambda_.shape}."
-        )
-
+    # Check wavelength restriction for current implementation
+    if phase_type == 'skysurf':
+        if any(element > 10 for element in lambda_):
+            raise ValueError("This code does not work at lambda > 3.5 micron.")
+    
     if phase_type not in ['kelsall', 'skysurf']:
         raise ValueError("phase_type must be either 'kelsall' or 'skysurf'")
-    if phase_type == 'skysurf' and np.any(lambda_ > 3.5): # At 3.5 micron, thermal emission starts to kick in, and HST really couldn't calibrate that. So, let's ignore these wavelengths.
-        raise ValueError("This code does not work at lambda > 3.5 micron.")
+
     if np.any(lon < 0) or np.any(lon > 360):
         raise ValueError("Longitude (lon) must be in the range 0 to 360 degrees.")
     if np.any(lat < -90) or np.any(lat > 90):
         raise ValueError("Latitude (lat) must be in the range -90 to 90 degrees.")
 
-    # ---- engine resolution -------------------------------------------
-    if _legacy:
-        engine = 'ref' # this is the original idl routine that loops through every pointing (and is therefore slow)
-    if engine is None:
-        engine = _DEFAULT_ENGINE
-    if engine not in _ENGINES:
-        raise ValueError(f"engine must be one of {_ENGINES}, got {engine!r}")
-
-    # ---- parameters ---------------------------------------------------
+    # Load default parameters if noprovided
     if zpar is None:
-        zpar = _default_zpar()
+        zpar = read_zpars()
     else:
-        zpar = np.array(zpar, dtype=float) # you can give custom input parameters
-
-    # ---- build parameters ONCE per unique wavelength -------------------
-    lam_u, inv = np.unique(lambda_, return_inverse=True)
-    inv = np.asarray(inv).ravel()
+        zpar = np.array(zpar, dtype=float)
 
     if phase_type == 'kelsall':
-        zpar_u = np.tile(zpar, (len(lam_u), 1))
+        # Array of DIRBE wavelengths
+        dbwave = np.array([1.25, 2.2, 3.5, 4.9, 12, 25, 60, 100, 140, 240])
+        zpar = np.array([zpar]*len(lambda_), dtype=float)
+        # zpar = np.tile(zpar, (len(lambda_), 1))
+        # print(zpar)
+    
+    # Use the SKYSURF (O'Brien+2025) albedo and phase function
     if phase_type == 'skysurf':
-        albedo_arr = get_albedo(lam_u)
-        hong_params_arr = get_hong_params(lam_u)
-        mult_arr = get_mult(lam_u)
-        hong_params_arr[:, -3:] = hong_params_arr[:, 3:] * mult_arr
-        emiss_arr = get_emiss(lam_u)
-        zpar_u = put_zpar(zpar.copy(), 0, 0, 0, albedo_arr, det1=0,
-                          hg3=hong_params_arr, E1=emiss_arr)
+        
+        # Get SKYSURF parameters
+        albedo_arr = get_albedo(lambda_)
+        hong_params_arr = get_hong_params(lambda_)
+        
+        # if lambda_[0] > 1.6:
+        # Apply multiplicative factor for longer wavelengths
+        mult_arr = get_mult(lambda_)
+        
+        hong_params_arr[:,-3:] = hong_params_arr[:,3:] * mult_arr
 
-    zpar_u = np.atleast_2d(np.asarray(zpar_u, dtype=float))
-    if zpar_u.shape[0] != len(lam_u):
-        raise RuntimeError(f"Expected {len(lam_u)} parameter rows, "
-                           f"got {zpar_u.shape[0]}.")
+        # Get emissivity
+        emiss_arr = get_emiss(lambda_)
+        
+        # Update parameters
+        zpar = put_zpar(zpar, 0, 0, 0, albedo_arr, det1=0, hg3=hong_params_arr, E1=emiss_arr)
 
+    # Create data structure
     data = mk_zdata(lambda_, day, lon, lat)
+    
+    # Call kernel with phase_type parameter
+    zodi = zkernel(data, zpar, phase_type=phase_type, L2 = L2, no_colcorr=True, solar_irr=solar_irr,
+                   new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only,obsxyz_eq=obsxyz)
 
-    kw = dict(phase_type=phase_type, L2=L2, no_colcorr=True,
-              solar_irr=solar_irr, new_iso_comp=new_iso_comp,
-              iso_comp_only=iso_comp_only)
+    rounded_zodi = np.round(zodi, 5)
 
-    # ---- 'numba' engine, with fallback --------------------------------
-    if engine == 'numba':
-        if zkernel_numba is None or not NUMBA_AVAILABLE:
-            reason = "numba is not installed"
-        else:
-            try:
-                zodi = zkernel_numba(data, zpar_u, group=inv,
-                                     n_jobs=n_jobs, **kw)
-                return np.round(zodi, 5)
-            except RuntimeError as e:
-                reason = str(e)
-        if reason not in _FALLBACK_WARNED:
-            _FALLBACK_WARNED.add(reason)
-            warnings.warn(f"engine='numba' unavailable ({reason}); "
-                          "using engine='numpy' instead.", RuntimeWarning,
-                          stacklevel=2)
-        # fall through to numpy
-
-    # ---- 'numpy' engine ------------------------------------------------
-    zodi = zkernel_fast(data, zpar_u, group=inv, n_jobs=n_jobs,
-                        scatt_mode=scatt_mode, **kw)
-    return np.round(zodi, 5)
-
+    return rounded_zodi
 
 # Example usage
 if __name__ == "__main__":
     lambda_val = 1.25
-    phase_type = 'kelsall'
+    phase_type = 'kelsall'  # or 'skysurf'
     day = np.array([1.0, 2.0, 3.0])
     lon = np.array([1.0, 10.0, 20.0])
     lat = np.array([1.0, 5.0, 10.0])
