@@ -27,10 +27,8 @@ __all__ = ['get_zmod', 'read_zpars', 'mk_zdata',
 #  'numba'           : compiled scalar kernel. ~4x faster single-core.
 #                      Falls back to 'numpy' if numba is unavailable or a
 #                      safety guard trips.
-#  'ref'             : original per-pixel loop (as done in the original 
-#                      IDL code). Slow; for validation.
 # ----------------------------------------------------------------------
-_ENGINES = ('numpy', 'numba', 'ref')
+_ENGINES = ('numpy', 'numba')
 _DEFAULT_ENGINE = 'numpy'
 _FALLBACK_WARNED = set()
 
@@ -45,7 +43,6 @@ _HONG = slice(183, 189)                # g1, g2, g3, w1, w2, w3
 _ALB_OFF = 0
 _EM_OFF = 4
 
-NUMBA_VERIFY_EVERY_FIT_STEP = False
 _NUMBA_FIT_OK = set()
 
 
@@ -262,7 +259,7 @@ def _apply_fitting(zpar_u, inv, fit):
 
 def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
              solar_irr=None, new_iso_comp=False, iso_comp_only=False,
-             engine=None, n_jobs=1, scatt_mode='auto', _legacy=False,
+             engine=None, n_jobs=1, scatt_mode='auto',
              fitting_hong=None, fitting_albedo=None, fitting_em_band=None,
              fitting_em_smooth=None, fitting_em_ring=None):
     """
@@ -276,7 +273,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     phase_type : str
         "kelsall" - standard Kelsall+1998 phase function
         "skysurf" - O'Brien+2026 phase function / albedo / emissivity
-        "fitting" - SKYSURF physics (Hong phase function), with every
+        "fitting" - To be used when performing model fitting.
+                    Utilizes SKYSURF physics (Hong phase function), with every
                     scattering/emission value supplied by the caller:
                       * ALL fitting_* arguments and solar_irr are REQUIRED
                       * get_albedo, get_hong_params, get_mult, get_emiss and
@@ -302,22 +300,17 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         If True, include isotropic component (default: False)
     iso_comp_only : bool, optional
         If True, model ONLY isotropic component (default: False)
-    engine : {'numpy', 'numba', 'ref'}, optional
+    engine : {'numpy', 'numba'}, optional
         Compute backend. Default is the module default (see
         set_default_engine), initially 'numpy'.
           'numpy' - batched NumPy; bit-identical to the original code
           'numba' - compiled scalar loops; ~1e-13 relative difference,
-                    ~4x faster on a single core. Falls back to 'numpy' if
-                    numba is unavailable or a safety guard trips.
-          'ref'   - original per-pixel loop (slow, for validation)
-                    NOTE: not currently wired up; falls through to 'numpy'.
+                    ~4x faster on a single core. 
     n_jobs : int, optional
         Threads to use (default: 1 core). Set to 1 inside MCMC/MPI pools.
         Set to -1 to use all available cores.
     scatt_mode : str, optional
         'auto' (default), 'vector' or 'loop'; see zkernel_fast
-    _legacy : bool, optional
-        Deprecated alias for engine='ref'
 
     Fitting parameters (REQUIRED when phase_type='fitting', not allowed otherwise):
     -------------------------------------------------------------------------------
@@ -378,6 +371,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         if missing:
             raise ValueError("phase_type='fitting' requires every fitting value; "
                              "missing: " + ", ".join(missing))
+    
+    # If any of the fitting params are defined, then phase_type must be "fittin"
     elif any(v is not None for v in fit_args.values()):
         raise ValueError("fitting_* arguments require phase_type='fitting'")
 
@@ -412,8 +407,6 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         raise ValueError("Latitude (lat) must be in the range -90 to 90 degrees.")
 
     # ---- engine resolution -------------------------------------------
-    if _legacy:
-        engine = 'ref'  # original IDL-style per-pointing loop (slow)
     if engine is None:
         engine = _DEFAULT_ENGINE
     if engine not in _ENGINES:
@@ -430,8 +423,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     inv = np.asarray(inv).ravel()
 
     if phase_type in ('kelsall', 'fitting'):
-        # 'fitting' starts from zpar as-is: no SKYSURF tables
-        zpar_u = np.tile(zpar, (len(lam_u), 1))
+        zpar_u = np.tile(zpar, (len(lam_u), 1)) # vectorized to have zpar list for all wavelengths or pointings
+
     elif phase_type == 'skysurf':
         albedo_arr = get_albedo(lam_u)
         hong_params_arr = get_hong_params(lam_u)
@@ -446,10 +439,10 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         raise RuntimeError(f"Expected {len(lam_u)} parameter rows, "
                            f"got {zpar_u.shape[0]}.")
 
-    # ---- fitting values (written on top of zpar) -----------------------
     if fit_mode:
         fit = _broadcast_fitting(lambda_.size, **fit_args)
         zpar_u, inv = _apply_fitting(zpar_u, inv, fit)
+        zpar_u[:, 1:10] = 0.0      # unused by the skysurf kernels; matches put_zpar
 
     data = mk_zdata(lambda_, day, lon, lat)
 
@@ -457,33 +450,22 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
               solar_irr=solar_irr, new_iso_comp=new_iso_comp,
               iso_comp_only=iso_comp_only)
 
+    # Don't round when fitting cause you might want high precision
     def _finish(zodi):
         return zodi if fit_mode else np.round(zodi, 5)
 
-    # ---- 'numba' engine, with fallback --------------------------------
+    # ---- 'numba' engine (no fallback: fail loudly) --------------------
     if engine == 'numba':
         if zkernel_numba is None or not NUMBA_AVAILABLE:
-            reason = "numba is not installed"
-        else:
-            # In fitting mode, verify against numpy once per configuration
-            # (not every MCMC step).
-            vkey = (L2, new_iso_comp, iso_comp_only, tuple(lam_u.tolist()))
-            skip = (fit_mode and not NUMBA_VERIFY_EVERY_FIT_STEP
-                    and vkey in _NUMBA_FIT_OK)
-            try:
-                zodi = zkernel_numba(data, zpar_u, group=inv, n_jobs=n_jobs,
-                                     _verified=skip, **kw)
-                if fit_mode:
-                    _NUMBA_FIT_OK.add(vkey)
-                return _finish(zodi)
-            except RuntimeError as e:
-                reason = str(e)
-        if reason not in _FALLBACK_WARNED:
-            _FALLBACK_WARNED.add(reason)
-            warnings.warn(f"engine='numba' unavailable ({reason}); "
-                          "using engine='numpy' instead.", RuntimeWarning,
-                          stacklevel=2)
-        # fall through to numpy
+            raise RuntimeError(
+                "engine='numba' was requested but numba is not available. "
+                "Install numba, or call with engine='numpy'.")
+        zodi = zkernel_numba(data, zpar_u, group=inv, n_jobs=n_jobs, **kw)
+        if fit_mode:
+            # Records that numba actually ran (checked by the tests)
+            _NUMBA_FIT_OK.add((L2, new_iso_comp, iso_comp_only,
+                               tuple(lam_u.tolist())))
+        return _finish(zodi)
 
     # ---- 'numpy' engine ------------------------------------------------
     zodi = zkernel_fast(data, zpar_u, group=inv, n_jobs=n_jobs,
