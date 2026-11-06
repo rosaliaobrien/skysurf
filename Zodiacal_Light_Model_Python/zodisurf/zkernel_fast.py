@@ -18,7 +18,7 @@ import numpy as np
 
 # Important all the important physics functions from the original code :)
 from zodisurf.zkernelpy_original import (earthsun, scattfunc, thermfunc, zsrcfunc,
-                                zcloud, migband, solring, new_isocloud)
+                                zcloud, migband, solring, new_isocloud, OBLIQUITY, KMINAU, obssun)
 
 __all__ = ["zkernel_fast"]
 
@@ -67,11 +67,6 @@ def _simpint_batch(nsteps):
 # ----------------------------------------------------------------------
 #  Scattering: vectorized call, or per-LOS fallback
 # ----------------------------------------------------------------------
-        # phase, Det, Lambda, los, R, Re_e, SE_e, aScatt, sirr = args
-        # try:
-        #     sv = _scatt_vector(*args)
-        # Re_e = Re[p]
-        # SE_e = SolElong[p]
 def _scatt_vector(phase_type, Det, Lambda, los, R, Re_e, SE_e, aScatt, sirr):
     out = scattfunc(phase_type, Det, Lambda, los, R, Re_e, SE_e, aScatt,
                     solar_irr=sirr)
@@ -200,6 +195,10 @@ def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
         X0 = obsxyz[0]/KMINAU
         Y0 = obsxyz[1]/KMINAU
         Z0 = obsxyz[2]/KMINAU
+
+    X0 = np.broadcast_to(np.asarray(X0, dtype=np.float64), (npts,))
+    Y0 = np.broadcast_to(np.asarray(Y0, dtype=np.float64), (npts,))
+    Z0 = np.broadcast_to(np.asarray(Z0, dtype=np.float64), (npts,))
         
     Re = np.broadcast_to(np.asarray(Re, dtype=np.float64), (npts,))
     SolElong = np.broadcast_to(np.asarray(SolElong, dtype=np.float64), (npts,))
@@ -215,7 +214,7 @@ def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
 
     # B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON)
 
-    # RECOSTHETA=-X0 * COSLAT * COSLON - Y0 * COSLAT * SINLON - Z0 * SINLAT
+    RECOSTHETA=-X0 * COSLAT * COSLON - Y0 * COSLAT * SINLON - Z0 * SINLAT
     B = -2.0 * RECOSTHETA
 
     C = Re**2 - RMAX**2
@@ -267,7 +266,7 @@ def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
         X = X0[p] + Sxy * COSLON[p]
         Y = Y0[p] + Sxy * SINLON[p]
         # Z = los * SINLAT[p]
-        Sz = los * SINLAT
+        Sz = los * SINLAT[p]
         Z = Z0[p] + Sz
         R = np.sqrt(X**2 + Y**2 + Z**2)
 

@@ -191,9 +191,9 @@ def obssun(obsxyz,lon,lat):
     # Solar elongation (radians)
     # from dot product of target vector and sun vector
     obs_SolElong = np.arccos((-obsxyz[0]/KMINAU*np.cos(lat*d2r)*np.cos(lon*d2r) - obsxyz[1]/KMINAU*np.cos(lat*d2r)*np.sin(lon*d2r) - obsxyz[2]/KMINAU*np.sin(lat*d2r))/(obs_Dis))
-    print('o',obs_SolElong)
+    # print('o',obs_SolElong)
     
-    obs_Lon = np.atan2(obsxyz[1],obsxyz[0])
+    obs_Lon = np.arctan2(obsxyz[1],obsxyz[0])
 
     return obs_Dis, obs_SolElong, obs_Lon
 

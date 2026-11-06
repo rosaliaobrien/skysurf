@@ -20,7 +20,7 @@ Accuracy: ~1e-13 relative vs zkernel_fast (summation order differs).
 import os
 import numpy as np
 
-from zodisurf.zkernelpy_original import zsrcfunc, scattfunc, thermfunc, solar_sp
+from zodisurf.zkernelpy_original import zsrcfunc, scattfunc, thermfunc, solar_sp, OBLIQUITY, KMINAU, obssun
 
 try:
     from numba import njit, prange, set_num_threads, get_num_threads
@@ -289,7 +289,7 @@ def _solring(x, y, z, R, Theta, P):
 #  Compiled driver: one thread per block of pixels
 # ======================================================================
 @njit(parallel=True, cache=True)
-def _core(P, nsteps, X0, Y0, Re, COSLAT, SINLAT, COSLON, SINLON,
+def _core(P, nsteps, X0, Y0, Z0, Re, COSLAT, SINLAT, COSLON, SINLON,
           SIN_SE, COS_SE, EML, out):
     npts = nsteps.shape[0]
     iso_only = P[M_ISOONLY] != 0.0
@@ -300,6 +300,7 @@ def _core(P, nsteps, X0, Y0, Re, COSLAT, SINLAT, COSLON, SINLON,
         re = Re[p]
         x0 = X0[p]
         y0 = Y0[p]
+        z0 = Z0[p]
         cl, sl = COSLAT[p], SINLAT[p]
         clo, slo = COSLON[p], SINLON[p]
         sse, cse = SIN_SE[p], COS_SE[p]
@@ -318,7 +319,7 @@ def _core(P, nsteps, X0, Y0, Re, COSLAT, SINLAT, COSLON, SINLON,
             sxy = los * cl
             x = x0 + sxy * clo
             y = y0 + sxy * slo
-            z = los * sl
+            z = z0 + los * sl          # was: z = los * sl
             r = np.sqrt(x * x + y * y + z * z)
 
             sc = _scatt(los, r, re, sse, cse, P)
@@ -468,18 +469,15 @@ def warmup(phase_type='skysurf'):
 # ======================================================================
 def zkernel_numba(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
                   solar_irr=None, new_iso_comp=False, iso_comp_only=False,
-                  group=None, n_jobs=None, _verified=None):
+                  group=None, n_jobs=None, obsxyz_eq=None, _verified=None):
     """
-    Numba equivalent of zkernel_fast. Raises RuntimeError if a guard trips;
-    callers should fall back to zkernel_fast in that case.
-
-    No runtime self-verification is performed. Validate against
-    zkernel_fast with the test suite after any change to the physics
-    functions in zkernelpy_original (scattfunc, thermfunc, densities, ...).
-
+    Numba equivalent of zkernel_fast, including the obsxyz_eq branch.
+    Raises RuntimeError if a guard trips; callers should fall back to zkernel_fast.
     `_verified` is accepted for backward compatibility and ignored.
     """
-    from zodisurf.zkernelpy_original import earthsun
+    from zodisurf.zkernelpy_original import earthsun, obssun
+    # Adjust this import to wherever zkernel_fast gets these names.
+    from zodisurf.zkernelpy_original import OBLIQUITY, KMINAU
 
     reason = guard_reason(a, phase_type, no_colcorr)
     if reason is not None:
@@ -507,29 +505,50 @@ def zkernel_numba(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
     if n_jobs is not None and NUMBA_AVAILABLE:
         set_num_threads(max(1, int(n_jobs)))
 
-    # ---- per-pixel geometry ----
+    # ---- observer geometry (mirrors zkernel_fast) ----
     SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis = earthsun(day, lon_deg, lat_deg)
-    Re = np.ascontiguousarray(np.broadcast_to(
-        np.asarray(L2_Dis if L2 else Earth_Dis, dtype=np.float64), (npts,)))
+    if obsxyz_eq is None:
+        Re = L2_Dis if L2 else Earth_Dis
+        Theta = Earth_Lon
+        X0 = Re * np.cos(Theta)
+        Y0 = Re * np.sin(Theta)
+        Z0 = 0.0
+    else:
+        # L2 is ignored when obsxyz_eq is given (same as zkernel_fast)
+        obsxyz = np.array([obsxyz_eq[0],
+                           obsxyz_eq[1] * np.cos(OBLIQUITY) + obsxyz_eq[2] * np.sin(OBLIQUITY),
+                           -obsxyz_eq[1] * np.sin(OBLIQUITY) + obsxyz_eq[2] * np.cos(OBLIQUITY)])
+        obs_Dis, obs_SolElong, obs_Lon = obssun(obsxyz, lon_deg, lat_deg)
+        Re = obs_Dis
+        Theta = obs_Lon
+        X0 = obsxyz[0] / KMINAU
+        Y0 = obsxyz[1] / KMINAU
+        Z0 = obsxyz[2] / KMINAU
+
+    Re = np.ascontiguousarray(np.broadcast_to(np.asarray(Re, dtype=np.float64), (npts,)))
+    X0 = np.ascontiguousarray(np.broadcast_to(np.asarray(X0, dtype=np.float64), (npts,)))
+    Y0 = np.ascontiguousarray(np.broadcast_to(np.asarray(Y0, dtype=np.float64), (npts,)))
+    Z0 = np.ascontiguousarray(np.broadcast_to(np.asarray(Z0, dtype=np.float64), (npts,)))
     SolElong = np.broadcast_to(np.asarray(SolElong, dtype=np.float64), (npts,))
-    Earth_Lon = np.broadcast_to(np.asarray(Earth_Lon, dtype=np.float64), (npts,))
     EML = np.ascontiguousarray(np.broadcast_to(
         np.asarray(Earth_Mean_Lon, dtype=np.float64), (npts,)))
 
     lat, lon = lat_deg * D2R, lon_deg * D2R
     COSLAT, SINLAT = np.cos(lat), np.sin(lat)
     COSLON, SINLON = np.cos(lon), np.sin(lon)
-    X0 = Re * np.cos(Earth_Lon)
-    Y0 = Re * np.sin(Earth_Lon)
     SIN_SE, COS_SE = np.sin(SolElong), np.cos(SolElong)
 
-    B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON)
+    # ---- LOS range and Simpson steps (mirrors zkernel_fast) ----
+    RECOSTHETA = -X0 * COSLAT * COSLON - Y0 * COSLAT * SINLON - Z0 * SINLAT
+    B = -2.0 * RECOSTHETA
     C = Re**2 - RMAX**2
     with np.errstate(divide='ignore', invalid='ignore'):
         Q = -0.5 * B * (1.0 + np.sqrt(B**2 - 4.0 * C) / np.abs(B))
         RANGE = np.maximum(Q, C / Q)
-    RANGE = np.where(B == 0.0, np.sqrt(-C), RANGE)
-    nsteps = (np.rint(RANGE / _SIMP_H).astype(np.int64) + 1)
+        RANGE = np.where(B == 0.0, np.sqrt(-C), RANGE)
+    if not np.all(np.isfinite(RANGE)):
+        raise ValueError("Non-finite line-of-sight range encountered; check inputs.")
+    nsteps = np.rint(RANGE / _SIMP_H).astype(np.int64) + 1
 
     # ---- group pixels so every group has scalar parameters ----
     cols = [group.astype(np.float64), lam_all]
@@ -563,6 +582,7 @@ def zkernel_numba(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
         _core(P,
               np.ascontiguousarray(nsteps[pix]),
               np.ascontiguousarray(X0[pix]), np.ascontiguousarray(Y0[pix]),
+              np.ascontiguousarray(Z0[pix]),
               np.ascontiguousarray(Re[pix]),
               np.ascontiguousarray(COSLAT[pix]), np.ascontiguousarray(SINLAT[pix]),
               np.ascontiguousarray(COSLON[pix]), np.ascontiguousarray(SINLON[pix]),

@@ -261,7 +261,7 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
              solar_irr=None, new_iso_comp=False, iso_comp_only=False,
              engine=None, n_jobs=1, scatt_mode='auto',
              fitting_hong=None, fitting_albedo=None, fitting_em_band=None,
-             fitting_em_smooth=None, fitting_em_ring=None):
+             fitting_em_smooth=None, fitting_em_ring=None, obsxyz_eq=None):
     """
     Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity
     for a given set of LOS, Wavelength, and Time.
@@ -448,7 +448,7 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
 
     kw = dict(phase_type=kernel_phase, L2=L2, no_colcorr=True,
               solar_irr=solar_irr, new_iso_comp=new_iso_comp,
-              iso_comp_only=iso_comp_only)
+              iso_comp_only=iso_comp_only, obsxyz_eq=obsxyz_eq)
 
     # Don't round when fitting cause you might want high precision
     def _finish(zodi):
