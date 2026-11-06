@@ -625,6 +625,25 @@ def simpint(b, stepsize=0.025):
     grid = np.arange(tsteps, dtype=np.float32) * np.float32(h)
     wts = np.zeros(tsteps, dtype=np.float32)
 
+#   KNOWN ISSUE (reported by Mischa Schirmer and Claude):
+#   because `stepsize` is fixed, the number and absolute placement of the line-of-sight quadrature nodes
+#   depend on `b` alone. When `b` drifts smoothly with
+#   time -- which it always does a little, since it derives from the Earth-Sun distance -- the discrete
+#   nodes drift too. Where the integrand along the line of sight is genuinely smooth this is harmless.
+#   But scattfunc()'s `itest = (LOS >= Re*cos(SolElong))` branch introduces a
+#   slope discontinuity in the scattering-angle profile at a THIRD, independently-computed location along
+#   the line of sight. Whenever a drifting quadrature node crosses that fixed location, the Simpson-weighted
+#   sum jumps by a small but real amount (order 1e-4 to 1e-3 relative, in our tests) for a single time step,
+#   then is smooth again -- because the node's assignment to one side of the kink or the other has flipped.
+#   This is invisible for a flat, in-ecliptic-plane observer, but becomes far
+#   more frequent -- roughly every 5-7 months in our tests -- for an observer with real out-of-ecliptic
+#   motion (e.g. a halo orbit). Confirmed by: (a) evaluating at sub-hourly time
+#   resolution, ruling out a plotting/sampling artifact; (b) instrumenting zkernel() directly, showing every
+#   dust-density component (zcloud, migband x4, solring) stays smooth across the jump while only `Scatt`
+#   (scattfunc's return value) steps; (c) shrinking `stepsize` 5x shrinks the jump by a similar factor at
+#   the same timestamp, the standard signature of a quadrature-discretization artifact rather than a
+#   genuine feature.
+
     # Match IDL's 6-digit truncated constants EXACTLY
     # IDL: .333333, 1.333333, 0.666667
     # Use float32 to match IDL's single precision
