@@ -311,6 +311,9 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
         Set to -1 to use all available cores.
     scatt_mode : str, optional
         'auto' (default), 'vector' or 'loop'; see zkernel_fast
+    obsxyz_eq : arr, optional
+        Observer position (X,Y,Z) in km. ZodiSURF currently only supports ONE
+        observer position at a time when obsxyz_eq is defined.
 
     Fitting parameters (REQUIRED when phase_type='fitting', not allowed otherwise):
     -------------------------------------------------------------------------------
@@ -352,6 +355,24 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     # ---- phase type ---------------------------------------------------
     if phase_type not in _PHASE_TYPES:
         raise ValueError(f"phase_type must be one of {_PHASE_TYPES}, got {phase_type!r}")
+
+    # ---- obsxyz_eq: one observer position per call ----------------------
+    if obsxyz_eq is not None:
+        obs_arr = np.asarray(obsxyz_eq, dtype=float)
+        obs_pos = np.squeeze(obs_arr)                # allow (3,), (1, 3) or (3, 1)
+        if obs_pos.shape != (3,):
+            raise ValueError(
+                f"obsxyz_eq must be ONE observer position [X, Y, Z] in km, "
+                f"with shape (3,), but got shape {obs_arr.shape}. "
+                "get_zmod uses one observer position per call, so for a moving "
+                "observer call get_zmod once per epoch with that epoch's position.")
+        if not np.all(np.isfinite(obs_pos)):
+            raise ValueError("obsxyz_eq contains non-finite values.")
+        obsxyz_eq = obs_pos                           # pass 1-D array to the kernels
+    if obsxyz_eq is not None and np.unique(day).size > 1:
+        raise ValueError(
+            "obsxyz_eq is a single observer position, but `day` contains "
+            f"{np.unique(day).size} different epochs. Call get_zmod once per epoch.")
 
     fit_mode = (phase_type == 'fitting')
     kernel_phase = 'skysurf' if fit_mode else phase_type   # what the kernels see
