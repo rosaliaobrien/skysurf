@@ -1,0 +1,69 @@
+--- zkernelpy.py.orig	2026-09-22 10:49:33.089053404 +0000
++++ zkernelpy.py	2026-09-22 10:49:51.039582257 +0000
+@@ -1300,7 +1300,7 @@
+     return Source
+ 
+ 
+-def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=False, no_colcorr=True, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
++def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=False, no_colcorr=True, solar_irr=None, new_iso_comp=False, iso_comp_only=False, obs_xyz_au=None):
+ 
+ 
+     want_los_info = losinfo
+@@ -1441,10 +1441,20 @@
+         COSLAT = np.cos(lat)
+         SINLAT = np.sin(lat)
+ 
+-        X0 = Re * COSTHETA
+-        Y0 = Re * SINTHETA
+-        B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON)
+-        C = Re**2 - RMAX**2
++        # PATCH (real observer position): the stock code always places the observer IN the ecliptic
++        # plane (X0=Re*cosTheta, Y0=Re*sinTheta, Z0 implicitly 0), from a simplified analytic Earth
++        # orbit (+ a fixed scalar L2 offset). obs_xyz_au, if given, is the TRUE heliocentric ecliptic
++        # Cartesian position [AU] for this point (e.g. real spacecraft ephemeris), used in its place,
++        # including its out-of-ecliptic Z0 component. Reduces exactly to the original when it is None.
++        if obs_xyz_au is not None:
++            X0, Y0, Z0 = obs_xyz_au[ilos]
++            Re_true = np.sqrt(X0**2 + Y0**2 + Z0**2)
++        else:
++            X0, Y0, Z0 = Re * COSTHETA, Re * SINTHETA, 0.0
++            Re_true = Re
++
++        B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON + Z0 * SINLAT)
++        C = Re_true**2 - RMAX**2
+         Q = -0.5 * B * (1.0 + np.sqrt(B**2 - 4.0 * C) / abs(B))
+         RANGE = max([Q, C / Q])
+ 
+@@ -1453,9 +1463,9 @@
+         los, gqwts = simpint(RANGE)
+ 
+         Sxy = los * COSLAT
+-        X = Re * COSTHETA + Sxy * COSLON
+-        Y = Re * SINTHETA + Sxy * SINLON
+-        Z = los * SINLAT
++        X = X0 + Sxy * COSLON
++        Y = Y0 + Sxy * SINLON
++        Z = Z0 + los * SINLAT
+         R = np.sqrt(X**2 + Y**2 + Z**2)
+ 
+         Lambda = data[ilos]['wave_len']
+--- get_zmod.py.orig	2026-09-22 10:56:50.015420417 +0000
++++ get_zmod.py	2026-09-22 10:50:01.634628840 +0000
+@@ -134,7 +134,7 @@
+ 
+     return zdata
+ 
+-def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
++def get_zmod(lambda_, phase_type, day, lon, lat, L2 = False, zpar=None, solar_irr=None, new_iso_comp=False, iso_comp_only=False, obs_xyz_au=None):
+     """
+     Compute the Kelsall et al. 1998 (ApJ,508,44) ZODI model intensity 
+     for a given set of LOS, Wavelength, and Time.
+@@ -241,7 +241,7 @@
+     
+     # Call kernel with phase_type parameter
+     zodi = zkernel(data, zpar, phase_type=phase_type, L2 = L2, no_colcorr=True, solar_irr=solar_irr,
+-                   new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only)
++                   new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only, obs_xyz_au=obs_xyz_au)
+ 
+     rounded_zodi = np.round(zodi, 5)
+ 

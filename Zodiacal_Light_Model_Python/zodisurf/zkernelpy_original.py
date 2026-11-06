@@ -17,6 +17,9 @@ COEFF = 15.0 / PI**5 * STEPHAN_BOLTZMANN
 RMAX = 5.2  # Jupiter's orbit radius
 NUMBER_OF_STEPS = 50
 
+# Needed when calculating observer based on X, Y, Z position
+OBLIQUITY = 23.4392794 * PI/180
+KMINAU = 149597870.7
 
 class RZODI:
     """
@@ -162,6 +165,37 @@ def colcorr(det, t, return_derivative=False):
         return cc, dcdt
     else:
         return cc
+
+# Written by Tim Carleton
+def obssun(obsxyz,lon,lat):
+    """
+    Returns position parameters useful for calculation from an xyz tuple of barycentric coordinates
+    and ecliptic latitude and longitude of target and day of year
+
+    Parameters:
+    obsxyz (3-tuple of floats): barycentric coordinates in km (x, y, z)
+    lon (float): Ecliptic longitude of line-of-sight in degrees
+    lat (float): Ecliptic latitude of line-of-sight in degrees
+
+    Returns:
+    SolElong (float): Solar elongation in radians
+    Earth_Dis (float): Earth-Sun distance in AU
+    Earth_Lon (float): Earth's true longitude (radians)
+    Earth_Mean_Lon (float): Earth's mean longitude (radians)
+    """
+
+    obs_Dis = np.sqrt((obsxyz[0]/KMINAU)**2 + (obsxyz[1]/KMINAU)**2 + (obsxyz[2]/KMINAU)**2)
+    
+    d2r = np.pi / 180.0
+    
+    # Solar elongation (radians)
+    # from dot product of target vector and sun vector
+    obs_SolElong = np.arccos((-obsxyz[0]/KMINAU*np.cos(lat*d2r)*np.cos(lon*d2r) - obsxyz[1]/KMINAU*np.cos(lat*d2r)*np.sin(lon*d2r) - obsxyz[2]/KMINAU*np.sin(lat*d2r))/(obs_Dis))
+    print('o',obs_SolElong)
+    
+    obs_Lon = np.atan2(obsxyz[1],obsxyz[0])
+
+    return obs_Dis, obs_SolElong, obs_Lon
 
 def zPlanck(T, lam_um, return_derivative=False):
     """

@@ -2,9 +2,9 @@ import numpy as np
 import json
 from scipy.interpolate import interp1d
 
-from zodisurf.zkernelpy import get_parnames
-from zodisurf.zkernel_fast import zkernel_fast
-from zodisurf.zkernel_ref import zkernel_ref
+from zodisurf.zkernelpy_original import get_parnames, zkernel
+# from zodisurf.zkernel_fast import zkernel_fast
+# from zodisurf.zkernel_ref import zkernel_ref
 from zodisurf.skysurf_params import get_albedo, get_hong_params, get_mult, get_emiss, put_zpar
 from zodisurf.solar_sp import solar_sp
 
@@ -283,7 +283,7 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None, solar_irr=
     # Create data structure
     data = mk_zdata(lambda_, day, lon, lat)
 
-    zodi = zkernel_fast(data, zpar_u, group=inv, phase_type=phase_type, L2=L2,
+    zodi = zkernel(data, zpar_u, group=inv, phase_type=phase_type, L2=L2,
                         no_colcorr=True, solar_irr=solar_irr,
                         new_iso_comp=new_iso_comp, iso_comp_only=iso_comp_only,
                         n_jobs=n_jobs, chunk_points=chunk_points, scatt_mode=scatt_mode)

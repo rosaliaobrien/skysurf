@@ -1,0 +1,171 @@
+--- zodisurf/zkernelpy_original.py	2026-10-30 09:52:05
++++ Testing/tim_oct30_zkernelpy.py	2026-11-05 15:06:04
+@@ -15,7 +15,10 @@
+ STEPHAN_BOLTZMANN = 5.6697e-12  # Stephan-Boltzmann constant
+ COEFF = 15.0 / PI**5 * STEPHAN_BOLTZMANN
+ RMAX = 5.2  # Jupiter's orbit radius
++KMINAU = 149597870.7
+ NUMBER_OF_STEPS = 50
++OBLIQUITY = 23.4392794 * PI/180
++
+ 
+ 
+ class RZODI:
+@@ -569,6 +572,37 @@
+     w = 0.5 * (b - a) * w
+     return x, w
+ '''
++
++def obssun(obsxyz,lon,lat):
++    """
++    Returns position parameters useful for calculation from an xyz tuple of barycentric coordinates
++    and ecliptic latitude and longitude of target and day of year
++
++    Parameters:
++    obsxyz (3-tuple of floats): barycentric coordinates in km (x, y, z)
++    lon (float): Ecliptic longitude of line-of-sight in degrees
++    lat (float): Ecliptic latitude of line-of-sight in degrees
++
++    Returns:
++    SolElong (float): Solar elongation in radians
++    Earth_Dis (float): Earth-Sun distance in AU
++    Earth_Lon (float): Earth's true longitude (radians)
++    Earth_Mean_Lon (float): Earth's mean longitude (radians)
++    """
++
++    obs_Dis = np.sqrt((obsxyz[0]/KMINAU)**2 + (obsxyz[1]/KMINAU)**2 + (obsxyz[2]/KMINAU)**2)
++    
++    d2r = np.pi / 180.0
++    
++    # Solar elongation (radians)
++    # from dot product of target vector and sun vector
++    obs_SolElong = np.arccos((-obsxyz[0]/KMINAU*np.cos(lat*d2r)*np.cos(lon*d2r) - obsxyz[1]/KMINAU*np.cos(lat*d2r)*np.sin(lon*d2r) - obsxyz[2]/KMINAU*np.sin(lat*d2r))/(obs_Dis))
++    print('o',obs_SolElong)
++    
++    obs_Lon = np.atan2(obsxyz[1],obsxyz[0])
++
++    return obs_Dis, obs_SolElong, obs_Lon
++    
+ 
+ def simpint(b, stepsize=0.025):
+     """
+@@ -616,7 +650,6 @@
+     return grid, wts
+ 
+ 
+-import numpy as np
+ 
+ def scattfunc(phase_type, det, Lambda, LOS, R, Re, SolElong, a, solar_irr=None):
+     """
+@@ -1300,7 +1333,7 @@
+     return Source
+ 
+ 
+-def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=False, no_colcorr=True, solar_irr=None, new_iso_comp=False, iso_comp_only=False):
++def zkernel(data, a, phase_type='kelsall', L2 = False, indxpar=None, losinfo=False, no_colcorr=True, solar_irr=None, new_iso_comp=False, iso_comp_only=False,obsxyz_eq=None):
+ 
+ 
+     want_los_info = losinfo
+@@ -1389,7 +1422,13 @@
+     iSrc_RB = np.arange(170, 170 + nSrc_RB)
+     aSrc_RB = a[:, iSrc_RB]
+ 
+-    SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis_from_sun = earthsun(data['day1990'], data['longitude'], data['latitude'])
++    if obsxyz_eq is None:
++        SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis_from_sun = earthsun(data['day1990'], data['longitude'], data['latitude'])
++        obs_Dis, obs_SolElong, obs_Lon = Earth_Dis, SolElong, Earth_Lon
++    else:
++        obsxyz = np.array([obsxyz_eq[0],obsxyz_eq[1]*np.cos(OBLIQUITY) + obsxyz_eq[2]*np.sin(OBLIQUITY),-obsxyz_eq[1]*np.sin(OBLIQUITY) + obsxyz_eq[2]*np.cos(OBLIQUITY)])
++        SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis_from_sun = earthsun(data['day1990'], data['longitude'], data['latitude'])
++        obs_Dis, obs_SolElong, obs_Lon  = obssun(obsxyz, data['longitude'], data['latitude'])
+ 
+     f = np.zeros(npts)
+ 
+@@ -1428,34 +1467,55 @@
+         lat = data[ilos]['latitude'] * d2r
+         lon = data[ilos]['longitude'] * d2r
+ 
+-        if L2 == True:
+-            Re = L2_Dis_from_sun[ilos]
+-        else:
+-            Re = Earth_Dis[ilos]
+-        Theta = Earth_Lon[ilos]
++        if obsxyz_eq is None:
++            if L2 == True:
++                Re = L2_Dis_from_sun[ilos]#
++            else:
++                Re = Earth_Dis[ilos]#
++            Theta = Earth_Lon[ilos]#
++            
++            COSTHETA = np.cos(Theta)
++            SINTHETA = np.sin(Theta)
++            X0 = Re * COSTHETA#
++            Y0 = Re * SINTHETA#
++            Z0 = 0 #defined as 0 for ecliptic plane
+ 
++        else:
++            Re = obs_Dis
++            Theta = obs_Lon
++
++            X0 = obsxyz[0]/KMINAU
++            Y0 = obsxyz[1]/KMINAU
++            Z0 = obsxyz[2]/KMINAU
++        
++        
+         COSTHETA = np.cos(Theta)
+         SINTHETA = np.sin(Theta)
++
+         COSLON = np.cos(lon)
+         SINLON = np.sin(lon)
+         COSLAT = np.cos(lat)
+         SINLAT = np.sin(lat)
+ 
+-        X0 = Re * COSTHETA
+-        Y0 = Re * SINTHETA
+-        B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON)
++        RECOSTHETA=-X0 * COSLAT * COSLON - Y0 * COSLAT * SINLON - Z0 * SINLAT   
++        #B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON)
++        #print('b',-X0 * COSLAT * COSLON, - Y0 * COSLAT * SINLON ,- Z0 * SINLAT )  
++        B = -2.0 * RECOSTHETA
+         C = Re**2 - RMAX**2
+         Q = -0.5 * B * (1.0 + np.sqrt(B**2 - 4.0 * C) / abs(B))
+         RANGE = max([Q, C / Q])
+ 
+         # CRITICAL FIX: IDL code uses simpint for ALL cases (gaussint is commented out)
+         # The original Python code had conditional logic, but IDL always uses Simpson integration
+-        los, gqwts = simpint(RANGE)
++        los, gqwts = simpint(RANGE)#
+ 
+         Sxy = los * COSLAT
+-        X = Re * COSTHETA + Sxy * COSLON
+-        Y = Re * SINTHETA + Sxy * SINLON
+-        Z = los * SINLAT
++        Sz = los * SINLAT
++        
++        X = X0 + Sxy * COSLON
++        Y = Y0 + Sxy * SINLON
++        Z = Z0 + Sz
++            
+         R = np.sqrt(X**2 + Y**2 + Z**2)
+ 
+         Lambda = data[ilos]['wave_len']
+@@ -1468,10 +1528,13 @@
+         else:
+             solar_irr_ilos = None
+ 
+-        Scatt = scattfunc(phase_type, Det, Lambda, los, R, Re, SolElong[ilos], aScatt[ilos], solar_irr=solar_irr_ilos)
++        #doesn't have any cloud geometry - use spacecraft location for calculation
++        Scatt = scattfunc(phase_type, Det, Lambda, los, R, obs_Dis, obs_SolElong[ilos], aScatt[ilos], solar_irr=solar_irr_ilos)
+ 
++        #doesn't have any cloud geometry - use spacecraft location for calculation
+         Therm = thermfunc(phase_type, Det, Lambda, R, aTherm[ilos], no_colcorr=no_colcorr)
+ 
++        #does cloud geometry
+         Dens_C = zcloud(X, Y, Z, R, aDens_C[ilos], FuncIndx=FuncIndx[ilos])
+ 
+         Src_C = zsrcfunc(Det, Scatt, Therm, aSrc_C[ilos], phase_type=phase_type)
+@@ -1538,3 +1601,4 @@
+ 
+     return f
+ 
++

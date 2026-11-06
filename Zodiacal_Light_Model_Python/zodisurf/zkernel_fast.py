@@ -67,9 +67,15 @@ def _simpint_batch(nsteps):
 # ----------------------------------------------------------------------
 #  Scattering: vectorized call, or per-LOS fallback
 # ----------------------------------------------------------------------
+        # phase, Det, Lambda, los, R, Re_e, SE_e, aScatt, sirr = args
+        # try:
+        #     sv = _scatt_vector(*args)
+        # Re_e = Re[p]
+        # SE_e = SolElong[p]
 def _scatt_vector(phase_type, Det, Lambda, los, R, Re_e, SE_e, aScatt, sirr):
     out = scattfunc(phase_type, Det, Lambda, los, R, Re_e, SE_e, aScatt,
                     solar_irr=sirr)
+    # out = = scattfunc(phase_type, Det, Lambda, los, R, Re_e, SE_e, aScatt, solar_irr=sirr)
     out = np.asarray(out, dtype=np.float64)
     if out.shape != R.shape:
         out = np.broadcast_to(out, R.shape).copy()
@@ -92,7 +98,7 @@ def _scatt_loop(phase_type, Det, Lambda, los, R, Re_e, SE_e, aScatt, sirr,
 # ----------------------------------------------------------------------
 def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
                  solar_irr=None, new_iso_comp=False, iso_comp_only=False,
-                 group=None, n_jobs=1, scatt_mode='auto'):
+                 group=None, n_jobs=1, scatt_mode='auto',obsxyz_eq=None):
     """
     Fast equivalent of zkernelpy.zkernel (without losinfo / partials).
 
@@ -108,6 +114,7 @@ def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
                             same answer as the per-LOS call, else fall back
                  'vector' - always vectorized
                  'loop'   - call scattfunc once per LOS (safest, slower)
+    obsxyz_eq  : optional arr of X, Y, Z coords of observer (in km)
 
     The scatt mode actually used is stored in zkernel_fast.last_scatt_mode.
     """
@@ -168,8 +175,33 @@ def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
         gparams.append((prm, Lambda, sirr, Det, aScatt))
 
     # ---- per-pixel geometry (vectorized) ------------------------------
-    SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis = earthsun(day, lon_deg, lat_deg)
-    Re = np.broadcast_to(np.asarray(L2_Dis if L2 else Earth_Dis, dtype=np.float64), (npts,))
+    # SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis = earthsun(day, lon_deg, lat_deg)
+    if obsxyz_eq is None:
+        SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis = earthsun(data['day1990'], data['longitude'], data['latitude'])
+        obs_Dis, obs_SolElong, obs_Lon = Earth_Dis, SolElong, Earth_Lon
+        if L2 == True:
+            Re = L2_Dis
+        else:
+            Re = Earth_Dis
+        Theta = Earth_Lon
+        
+        COSTHETA = np.cos(Theta)
+        SINTHETA = np.sin(Theta)
+        X0 = Re * COSTHETA#
+        Y0 = Re * SINTHETA#
+        Z0 = 0 #defined as 0 for ecliptic plane
+    else:
+        obsxyz = np.array([obsxyz_eq[0],obsxyz_eq[1]*np.cos(OBLIQUITY) + obsxyz_eq[2]*np.sin(OBLIQUITY),-obsxyz_eq[1]*np.sin(OBLIQUITY) + obsxyz_eq[2]*np.cos(OBLIQUITY)])
+        SolElong, Earth_Dis, Earth_Lon, Earth_Mean_Lon, L2_Dis = earthsun(data['day1990'], data['longitude'], data['latitude'])
+        obs_Dis, obs_SolElong, obs_Lon  = obssun(obsxyz, data['longitude'], data['latitude'])
+        Re = obs_Dis
+        Theta = obs_Lon
+
+        X0 = obsxyz[0]/KMINAU
+        Y0 = obsxyz[1]/KMINAU
+        Z0 = obsxyz[2]/KMINAU
+        
+    Re = np.broadcast_to(np.asarray(Re, dtype=np.float64), (npts,))
     SolElong = np.broadcast_to(np.asarray(SolElong, dtype=np.float64), (npts,))
     Earth_Lon = np.broadcast_to(np.asarray(Earth_Lon, dtype=np.float64), (npts,))
     Earth_Mean_Lon = np.broadcast_to(np.asarray(Earth_Mean_Lon, dtype=np.float64), (npts,))
@@ -178,10 +210,14 @@ def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
     lon = lon_deg * d2r
     COSLAT, SINLAT = np.cos(lat), np.sin(lat)
     COSLON, SINLON = np.cos(lon), np.sin(lon)
-    X0 = Re * np.cos(Earth_Lon)
-    Y0 = Re * np.sin(Earth_Lon)
+    # X0 = Re * np.cos(Earth_Lon)
+    # Y0 = Re * np.sin(Earth_Lon)
 
-    B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON)
+    # B = 2.0 * (X0 * COSLAT * COSLON + Y0 * COSLAT * SINLON)
+
+    # RECOSTHETA=-X0 * COSLAT * COSLON - Y0 * COSLAT * SINLON - Z0 * SINLAT
+    B = -2.0 * RECOSTHETA
+
     C = Re**2 - RMAX**2
     with np.errstate(divide='ignore', invalid='ignore'):
         Q = -0.5 * B * (1.0 + np.sqrt(B**2 - 4.0 * C) / np.abs(B))
@@ -230,7 +266,9 @@ def zkernel_fast(data, a, phase_type='kelsall', L2=False, no_colcorr=True,
         Sxy = los * COSLAT[p]
         X = X0[p] + Sxy * COSLON[p]
         Y = Y0[p] + Sxy * SINLON[p]
-        Z = los * SINLAT[p]
+        # Z = los * SINLAT[p]
+        Sz = los * SINLAT
+        Z = Z0[p] + Sz
         R = np.sqrt(X**2 + Y**2 + Z**2)
 
         Re_e = Re[p]
