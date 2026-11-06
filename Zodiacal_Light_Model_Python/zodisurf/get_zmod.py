@@ -312,8 +312,8 @@ def get_zmod(lambda_, phase_type, day, lon, lat, L2=False, zpar=None,
     scatt_mode : str, optional
         'auto' (default), 'vector' or 'loop'; see zkernel_fast
     obsxyz_eq : arr, optional
-        Observer position (X,Y,Z) in km. ZodiSURF currently only supports ONE
-        observer position at a time when obsxyz_eq is defined.
+        Observer position (X,Y,Z) in km in heliocentric equatorial coordinates. 
+        ZodiSURF currently only supports ONE observer position at a time when obsxyz_eq is defined.
 
     Fitting parameters (REQUIRED when phase_type='fitting', not allowed otherwise):
     -------------------------------------------------------------------------------
